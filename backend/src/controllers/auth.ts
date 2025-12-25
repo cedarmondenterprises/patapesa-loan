@@ -114,7 +114,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
 });
 
 // Verify email
-export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
+export const verifyEmail = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement email verification logic
   res.status(200).json({
     success: true,
@@ -123,7 +123,7 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // Request password reset
-export const requestPasswordReset = asyncHandler(async (req: Request, res: Response) => {
+export const requestPasswordReset = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement password reset request logic
   res.status(200).json({
     success: true,
@@ -132,7 +132,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
 });
 
 // Reset password
-export const resetPassword = asyncHandler(async (req: Request, res: Response) => {
+export const resetPassword = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement password reset logic
   res.status(200).json({
     success: true,

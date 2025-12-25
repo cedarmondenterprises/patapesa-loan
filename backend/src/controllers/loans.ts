@@ -5,7 +5,7 @@ import { validateLoanApplication } from '../utils/validators';
 import { ApiResponse } from '../types';
 
 // Get all loan products
-export const getLoanProducts = asyncHandler(async (req: Request, res: Response) => {
+export const getLoanProducts = asyncHandler(async (_req: Request, res: Response) => {
   const products = await loanService.getLoanProducts();
 
   res.status(200).json({
@@ -83,7 +83,7 @@ export const getLoanById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // Get all loans (admin only)
-export const getAllLoans = asyncHandler(async (req: Request, res: Response) => {
+export const getAllLoans = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement pagination and filters
   res.status(200).json({
     success: true,
@@ -177,7 +177,7 @@ export const getLoanRepayments = asyncHandler(async (req: Request, res: Response
 });
 
 // Make loan repayment
-export const makeRepayment = asyncHandler(async (req: Request, res: Response) => {
+export const makeRepayment = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement repayment logic
   res.status(200).json({
     success: true,

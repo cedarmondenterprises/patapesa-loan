@@ -140,28 +140,28 @@ export const validateRegistration = (data: {
   password: string;
   firstName: string;
   lastName: string;
-}): { valid: boolean; errors: Record<string, string> } => {
-  const errors: Record<string, string> = {};
+}): { valid: boolean; errors: Record<string, string[]> } => {
+  const errors: Record<string, string[]> = {};
 
   if (!validateEmail(data.email)) {
-    errors.email = 'Invalid email address';
+    errors.email = ['Invalid email address'];
   }
 
   if (!validatePhone(data.phone)) {
-    errors.phone = 'Invalid phone number (must be Kenyan format: +254...)';
+    errors.phone = ['Invalid phone number (must be Kenyan format: +254...)'];
   }
 
   const passwordValidation = validatePassword(data.password);
   if (!passwordValidation.valid) {
-    errors.password = passwordValidation.errors.join(', ');
+    errors.password = passwordValidation.errors;
   }
 
   if (!data.firstName || data.firstName.trim().length < 2) {
-    errors.firstName = 'First name must be at least 2 characters';
+    errors.firstName = ['First name must be at least 2 characters'];
   }
 
   if (!data.lastName || data.lastName.trim().length < 2) {
-    errors.lastName = 'Last name must be at least 2 characters';
+    errors.lastName = ['Last name must be at least 2 characters'];
   }
 
   return {
@@ -176,23 +176,23 @@ export const validateLoanApplication = (data: {
   amount: number;
   termMonths: number;
   purpose: string;
-}): { valid: boolean; errors: Record<string, string> } => {
-  const errors: Record<string, string> = {};
+}): { valid: boolean; errors: Record<string, string[]> } => {
+  const errors: Record<string, string[]> = {};
 
   if (!validateUUID(data.productId)) {
-    errors.productId = 'Invalid product ID';
+    errors.productId = ['Invalid product ID'];
   }
 
   if (!data.amount || data.amount <= 0) {
-    errors.amount = 'Loan amount must be greater than 0';
+    errors.amount = ['Loan amount must be greater than 0'];
   }
 
   if (!data.termMonths || data.termMonths <= 0) {
-    errors.termMonths = 'Loan term must be greater than 0';
+    errors.termMonths = ['Loan term must be greater than 0'];
   }
 
   if (!data.purpose || data.purpose.trim().length < 10) {
-    errors.purpose = 'Purpose must be at least 10 characters';
+    errors.purpose = ['Purpose must be at least 10 characters'];
   }
 
   return {

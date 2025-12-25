@@ -149,7 +149,7 @@ export const rejectKYCDocument = asyncHandler(async (req: Request, res: Response
 });
 
 // Upload document file
-export const uploadDocument = asyncHandler(async (req: Request, res: Response) => {
+export const uploadDocument = asyncHandler(async (_req: Request, res: Response) => {
   // TODO: Implement file upload to S3 or cloud storage
   // This is a placeholder for the actual file upload logic
   res.status(200).json({
