@@ -1,0 +1,32 @@
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/backend/src', '<rootDir>/frontend'],
+  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts', '**/?(*.)+(spec|test).tsx'],
+  transform: {
+    '^.+\\.tsx?$': 'ts-jest',
+  },
+  collectCoverageFrom: [
+    'backend/src/**/*.ts',
+    'frontend/**/*.{ts,tsx}',
+    '!backend/src/**/*.d.ts',
+    '!backend/src/**/*.test.ts',
+    '!frontend/**/*.test.{ts,tsx}',
+    '!**/node_modules/**',
+    '!**/dist/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/backend/src/$1',
+    '^@components/(.*)$': '<rootDir>/frontend/components/$1',
+    '^@pages/(.*)$': '<rootDir>/frontend/pages/$1',
+  },
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  testTimeout: 10000,
+  verbose: true,
+  clearMocks: true,
+  resetMocks: true,
+  restoreMocks: true,
+};
