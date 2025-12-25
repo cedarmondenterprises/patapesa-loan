@@ -1,0 +1,79 @@
+{
+  "name": "patapesa-loan-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Patapesa Loan Management System",
+  "main": "dist/index.js",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "db:migrate": "node dist/migrations/index.js",
+    "db:seed": "node dist/seeds/index.js"
+  },
+  "keywords": [
+    "loan",
+    "microfinance",
+    "patapesa",
+    "api"
+  ],
+  "author": "Cedarmond Enterprises",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "typescript": "^5.3.3",
+    "pg": "^8.11.3",
+    "redis": "^4.6.12",
+    "jsonwebtoken": "^9.1.2",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-validator": "^7.0.0",
+    "axios": "^1.6.2",
+    "uuid": "^9.0.1",
+    "joi": "^17.11.0",
+    "winston": "^3.11.0",
+    "compression": "^1.7.4",
+    "express-rate-limit": "^7.1.5",
+    "node-cache": "^5.1.2",
+    "sequelize": "^6.35.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/uuid": "^9.0.7",
+    "@types/jest": "^29.5.11",
+    "ts-node": "^10.9.2",
+    "ts-loader": "^9.5.1",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.1.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "supertest": "^6.3.3",
+    "@types/supertest": "^6.0.2",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cedarmondenterprises/patapesa-loan.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cedarmondenterprises/patapesa-loan/issues"
+  },
+  "homepage": "https://github.com/cedarmondenterprises/patapesa-loan#readme"
+}
