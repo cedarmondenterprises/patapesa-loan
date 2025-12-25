@@ -1,5 +1,5 @@
 import { query, transaction } from '../config/database';
-import { KYCDocument } from '../types';
+import { KYCDocument, KYCStatus, KYCDocumentWithUser } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import { PoolClient } from 'pg';
 
@@ -99,7 +99,7 @@ export const getUserKYCDocuments = async (userId: string): Promise<KYCDocument[]
 };
 
 // Get all pending KYC documents (admin)
-export const getPendingKYCDocuments = async (): Promise<any[]> => {
+export const getPendingKYCDocuments = async (): Promise<KYCDocumentWithUser[]> => {
   const result = await query(
     `SELECT kd.*, u.first_name, u.last_name, u.email, u.phone
      FROM kyc_documents kd
@@ -221,7 +221,7 @@ export const rejectKYCDocument = async (
 };
 
 // Get KYC document by ID
-export const getKYCDocumentById = async (documentId: string): Promise<any> => {
+export const getKYCDocumentById = async (documentId: string): Promise<KYCDocumentWithUser> => {
   const result = await query(
     `SELECT kd.*, u.first_name, u.last_name, u.email
      FROM kyc_documents kd
@@ -238,7 +238,7 @@ export const getKYCDocumentById = async (documentId: string): Promise<any> => {
 };
 
 // Get user KYC status
-export const getUserKYCStatus = async (userId: string): Promise<any> => {
+export const getUserKYCStatus = async (userId: string): Promise<KYCStatus> => {
   const userResult = await query(
     'SELECT kyc_status FROM users WHERE id = $1',
     [userId]

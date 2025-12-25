@@ -1,5 +1,5 @@
 import { query, transaction } from '../config/database';
-import { Loan, LoanApplicationRequest, LoanProduct } from '../types';
+import { Loan, LoanApplicationRequest, LoanProduct, LoanWithDetails } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import {
   calculateMonthlyPayment,
@@ -198,7 +198,7 @@ export const getUserLoans = async (userId: string): Promise<Loan[]> => {
 };
 
 // Get loan by ID
-export const getLoanById = async (loanId: string, userId?: string): Promise<any> => {
+export const getLoanById = async (loanId: string, userId?: string): Promise<LoanWithDetails> => {
   const params = userId ? [loanId, userId] : [loanId];
   const userCondition = userId ? 'AND user_id = $2' : '';
 
@@ -354,7 +354,7 @@ export const disburseLoan = async (
 };
 
 // Get loan repayments
-export const getLoanRepayments = async (loanId: string): Promise<any[]> => {
+export const getLoanRepayments = async (loanId: string): Promise<LoanRepayment[]> => {
   const result = await query(
     `SELECT * FROM loan_repayments 
      WHERE loan_id = $1 

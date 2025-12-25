@@ -143,16 +143,16 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
 };
 
 // Generate JWT token
-export const generateToken = (payload: any, secret: string, expiresIn: string): string => {
+export const generateToken = <T extends object>(payload: T, secret: string, expiresIn: string): string => {
   const jwt = require('jsonwebtoken');
   return jwt.sign(payload, secret, { expiresIn });
 };
 
 // Verify JWT token
-export const verifyToken = (token: string, secret: string): any => {
+export const verifyToken = <T = any>(token: string, secret: string): T | null => {
   const jwt = require('jsonwebtoken');
   try {
-    return jwt.verify(token, secret);
+    return jwt.verify(token, secret) as T;
   } catch (error) {
     return null;
   }

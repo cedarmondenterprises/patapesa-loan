@@ -221,3 +221,65 @@ export interface Notification {
   metadata?: Record<string, any>;
   createdAt: Date;
 }
+
+export interface LoanWithDetails extends Loan {
+  productName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
+export interface UserProfileData {
+  firstName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  nationalId?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  occupation?: string;
+  employerName?: string;
+  monthlyIncome?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankBranch?: string;
+  nextOfKinName?: string;
+  nextOfKinPhone?: string;
+  nextOfKinRelationship?: string;
+}
+
+export interface UserProfileComplete extends User {
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
+  occupation?: string;
+  employerName?: string;
+  monthlyIncome?: number;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankBranch?: string;
+  nextOfKinName?: string;
+  nextOfKinPhone?: string;
+  nextOfKinRelationship?: string;
+}
+
+export interface KYCStatus {
+  kycStatus: string;
+  documents: KYCDocument[];
+  requiredDocuments: string[];
+  optionalDocuments: string[];
+}
+
+export interface KYCDocumentWithUser extends KYCDocument {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+

@@ -1,6 +1,6 @@
 import { query, transaction } from '../config/database';
 import { env } from '../config/env';
-import { User, LoginRequest, RegisterRequest } from '../types';
+import { User, LoginRequest, RegisterRequest, UserProfileComplete, UserProfileData } from '../types';
 import { hashPassword, verifyPassword, generateToken, generateId } from '../utils/helpers';
 import { AppError } from '../middleware/errorHandler';
 import { PoolClient } from 'pg';
@@ -197,7 +197,7 @@ export const logout = async (token: string): Promise<void> => {
 };
 
 // Get user profile
-export const getProfile = async (userId: string): Promise<any> => {
+export const getProfile = async (userId: string): Promise<UserProfileComplete> => {
   const result = await query(
     `SELECT u.id, u.email, u.phone, u.first_name, u.last_name, u.date_of_birth, 
             u.national_id, u.role, u.status, u.kyc_status, u.email_verified, 
@@ -220,7 +220,7 @@ export const getProfile = async (userId: string): Promise<any> => {
 };
 
 // Update user profile
-export const updateProfile = async (userId: string, data: any): Promise<any> => {
+export const updateProfile = async (userId: string, data: UserProfileData): Promise<UserProfileComplete> => {
   return transaction(async (client: PoolClient) => {
     // Update user table if basic info is provided
     if (data.firstName || data.lastName || data.dateOfBirth || data.nationalId) {
