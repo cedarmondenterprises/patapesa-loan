@@ -54,3 +54,4 @@ temp/
 .eslintcache
 .prettierignore
 *.tgz
+*.tsbuildinfo
