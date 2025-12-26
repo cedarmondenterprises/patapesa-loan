@@ -9,6 +9,9 @@ interface FormErrors {
   general?: string;
 }
 
+// Email validation regex
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
@@ -16,9 +19,6 @@ export default function ForgotPasswordPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [emailSent, setEmailSent] = useState(false);
-
-  // Email validation regex
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // Validate form
   const validateForm = useCallback((): boolean => {
@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [email, emailRegex]);
+  }, [email]);
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
