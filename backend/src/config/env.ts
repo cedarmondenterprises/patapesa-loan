@@ -1,165 +1,196 @@
-import dotenv from 'dotenv';
-import path from 'path';
+/**
+ * Environment Configuration Module
+ * Handles all environment variables and validation
+ */
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../../..', '.env') });
+import { z } from 'zod';
 
-interface EnvConfig {
-  // Application
-  NODE_ENV: string;
-  APP_NAME: string;
-  APP_URL: string;
-  APP_PORT: number;
-  LOG_LEVEL: string;
+/**
+ * Define the schema for environment variables
+ */
+const envSchema = z.object({
+  // Node Environment
+  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
 
-  // Database
-  DB_HOST: string;
-  DB_PORT: number;
-  DB_USER: string;
-  DB_PASSWORD: string;
-  DB_NAME: string;
-  DB_SSL: boolean;
-  DB_POOL_MIN: number;
-  DB_POOL_MAX: number;
+  // Server Configuration
+  PORT: z.coerce.number().min(1).max(65535).default(3000),
+  HOST: z.string().default('0.0.0.0'),
 
-  // Redis
-  REDIS_HOST: string;
-  REDIS_PORT: number;
-  REDIS_PASSWORD: string;
-  REDIS_DB: number;
-  REDIS_URL: string;
+  // Database Configuration
+  DATABASE_URL: z.string().url('Invalid database URL'),
+  DB_HOST: z.string().default('localhost'),
+  DB_PORT: z.coerce.number().min(1).max(65535).default(5432),
+  DB_NAME: z.string(),
+  DB_USER: z.string(),
+  DB_PASSWORD: z.string(),
+  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
 
-  // JWT
-  JWT_SECRET: string;
-  JWT_EXPIRATION: string;
-  JWT_REFRESH_SECRET: string;
-  JWT_REFRESH_EXPIRATION: string;
+  // JWT Configuration
+  JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
+  JWT_EXPIRE: z.string().default('24h'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT refresh secret must be at least 32 characters'),
+  JWT_REFRESH_EXPIRE: z.string().default('7d'),
 
-  // API
-  API_VERSION: string;
-  API_BASE_URL: string;
-  API_TIMEOUT: number;
-  API_RATE_LIMIT_WINDOW: number;
-  API_RATE_LIMIT_MAX_REQUESTS: number;
+  // API Configuration
+  API_VERSION: z.string().default('v1'),
+  API_PREFIX: z.string().default('/api'),
+  CORS_ORIGIN: z.string().default('*'),
 
-  // Email
-  MAIL_HOST: string;
-  MAIL_PORT: number;
-  MAIL_USER: string;
-  MAIL_PASSWORD: string;
-  MAIL_FROM: string;
-  MAIL_FROM_NAME: string;
+  // Logging
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
-  // Payment Gateway
-  PAYMENT_PROVIDER: string;
-  MPESA_API_URL: string;
-  MPESA_CONSUMER_KEY: string;
-  MPESA_CONSUMER_SECRET: string;
+  // Email Configuration (Optional for transactional emails)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  SMTP_FROM: z.string().email().optional(),
 
-  // Security
-  CORS_ORIGIN: string;
-  CSRF_PROTECTION: boolean;
-  HELMET_ENABLED: boolean;
-  RATE_LIMIT_ENABLED: boolean;
+  // Payment Gateway Configuration
+  PAYMENT_GATEWAY_URL: z.string().url().optional(),
+  PAYMENT_GATEWAY_API_KEY: z.string().optional(),
+  PAYMENT_GATEWAY_SECRET: z.string().optional(),
 
-  // Loan Configuration
-  MIN_LOAN_AMOUNT: number;
-  MAX_LOAN_AMOUNT: number;
-  DEFAULT_INTEREST_RATE: number;
-  DEFAULT_LOAN_TERM_MONTHS: number;
+  // AWS/Cloud Configuration (Optional)
+  AWS_REGION: z.string().optional(),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+
+  // Third Party Services
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+
+  // Redis Configuration (Optional)
+  REDIS_URL: z.string().url().optional(),
+  REDIS_HOST: z.string().optional(),
+  REDIS_PORT: z.coerce.number().optional(),
+  REDIS_PASSWORD: z.string().optional(),
+
+  // Application-specific Configuration
+  MAX_LOAN_AMOUNT: z.coerce.number().positive().default(1000000),
+  MIN_LOAN_AMOUNT: z.coerce.number().positive().default(1000),
+  DEFAULT_INTEREST_RATE: z.coerce.number().positive().default(5),
+  MAX_LOAN_DURATION_MONTHS: z.coerce.number().positive().int().default(60),
+  MIN_LOAN_DURATION_MONTHS: z.coerce.number().positive().int().default(1),
+
+  // Application URLs
+  FRONTEND_URL: z.string().url(),
+  ADMIN_PANEL_URL: z.string().url().optional(),
+
+  // Feature Flags
+  ENABLE_2FA: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+  ENABLE_EMAIL_VERIFICATION: z.enum(['true', 'false']).transform(val => val === 'true').default('true'),
+  ENABLE_SMS_NOTIFICATIONS: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+});
+
+/**
+ * Type definition for environment variables
+ */
+export type Environment = z.infer<typeof envSchema>;
+
+/**
+ * Parse and validate environment variables
+ */
+function validateEnv(): Environment {
+  const env = { ...process.env };
+
+  const result = envSchema.safeParse(env);
+
+  if (!result.success) {
+    const errors = result.error.errors.map((error) => {
+      const path = error.path.join('.');
+      return `${path}: ${error.message}`;
+    });
+
+    throw new Error(
+      `Invalid environment variables:\n${errors.join('\n')}`
+    );
+  }
+
+  return result.data;
 }
 
-const getEnvVar = (key: string, defaultValue?: string): string => {
-  const value = process.env[key] || defaultValue;
-  if (!value && !defaultValue) {
-    throw new Error(`Environment variable ${key} is not defined`);
-  }
-  return value as string;
-};
+/**
+ * Export validated environment configuration
+ */
+let validatedEnv: Environment | null = null;
 
-const getEnvNumber = (key: string, defaultValue?: number): number => {
-  const value = process.env[key];
-  if (!value && defaultValue !== undefined) {
-    return defaultValue;
+export function getEnv(): Environment {
+  if (!validatedEnv) {
+    validatedEnv = validateEnv();
   }
-  const num = Number(value);
-  if (isNaN(num)) {
-    throw new Error(`Environment variable ${key} must be a number`);
-  }
-  return num;
-};
+  return validatedEnv;
+}
 
-const getEnvBoolean = (key: string, defaultValue: boolean = false): boolean => {
-  const value = process.env[key];
-  if (!value) {
-    return defaultValue;
-  }
-  return value.toLowerCase() === 'true';
-};
+/**
+ * Export individual helpers for common configurations
+ */
+export const config = {
+  isDevelopment: () => getEnv().NODE_ENV === 'development',
+  isProduction: () => getEnv().NODE_ENV === 'production',
+  isStaging: () => getEnv().NODE_ENV === 'staging',
 
-export const env: EnvConfig = {
-  // Application
-  NODE_ENV: getEnvVar('NODE_ENV', 'development'),
-  APP_NAME: getEnvVar('APP_NAME', 'Patapesa Loan'),
-  APP_URL: getEnvVar('APP_URL', 'http://localhost:3000'),
-  APP_PORT: getEnvNumber('APP_PORT', 5000),
-  LOG_LEVEL: getEnvVar('LOG_LEVEL', 'info'),
+  // Server
+  server: {
+    port: () => getEnv().PORT,
+    host: () => getEnv().HOST,
+    isDev: () => config.isDevelopment(),
+  },
 
   // Database
-  DB_HOST: getEnvVar('DB_HOST', 'localhost'),
-  DB_PORT: getEnvNumber('DB_PORT', 5432),
-  DB_USER: getEnvVar('DB_USER', 'postgres'),
-  DB_PASSWORD: getEnvVar('DB_PASSWORD'),
-  DB_NAME: getEnvVar('DB_NAME', 'patapesa_loan'),
-  DB_SSL: getEnvBoolean('DB_SSL', false),
-  DB_POOL_MIN: getEnvNumber('DB_POOL_MIN', 2),
-  DB_POOL_MAX: getEnvNumber('DB_POOL_MAX', 10),
-
-  // Redis
-  REDIS_HOST: getEnvVar('REDIS_HOST', 'localhost'),
-  REDIS_PORT: getEnvNumber('REDIS_PORT', 6379),
-  REDIS_PASSWORD: getEnvVar('REDIS_PASSWORD', ''),
-  REDIS_DB: getEnvNumber('REDIS_DB', 0),
-  REDIS_URL: getEnvVar('REDIS_URL', 'redis://localhost:6379/0'),
+  database: {
+    url: () => getEnv().DATABASE_URL,
+    host: () => getEnv().DB_HOST,
+    port: () => getEnv().DB_PORT,
+    name: () => getEnv().DB_NAME,
+    user: () => getEnv().DB_USER,
+    password: () => getEnv().DB_PASSWORD,
+    ssl: () => getEnv().DB_SSL,
+  },
 
   // JWT
-  JWT_SECRET: getEnvVar('JWT_SECRET'),
-  JWT_EXPIRATION: getEnvVar('JWT_EXPIRATION', '7d'),
-  JWT_REFRESH_SECRET: getEnvVar('JWT_REFRESH_SECRET'),
-  JWT_REFRESH_EXPIRATION: getEnvVar('JWT_REFRESH_EXPIRATION', '30d'),
+  jwt: {
+    secret: () => getEnv().JWT_SECRET,
+    expire: () => getEnv().JWT_EXPIRE,
+    refreshSecret: () => getEnv().JWT_REFRESH_SECRET,
+    refreshExpire: () => getEnv().JWT_REFRESH_EXPIRE,
+  },
 
   // API
-  API_VERSION: getEnvVar('API_VERSION', 'v1'),
-  API_BASE_URL: getEnvVar('API_BASE_URL', '/api/v1'),
-  API_TIMEOUT: getEnvNumber('API_TIMEOUT', 30000),
-  API_RATE_LIMIT_WINDOW: getEnvNumber('API_RATE_LIMIT_WINDOW', 15),
-  API_RATE_LIMIT_MAX_REQUESTS: getEnvNumber('API_RATE_LIMIT_MAX_REQUESTS', 100),
+  api: {
+    version: () => getEnv().API_VERSION,
+    prefix: () => getEnv().API_PREFIX,
+    corsOrigin: () => getEnv().CORS_ORIGIN,
+  },
 
-  // Email
-  MAIL_HOST: getEnvVar('MAIL_HOST', 'smtp.gmail.com'),
-  MAIL_PORT: getEnvNumber('MAIL_PORT', 587),
-  MAIL_USER: getEnvVar('MAIL_USER'),
-  MAIL_PASSWORD: getEnvVar('MAIL_PASSWORD'),
-  MAIL_FROM: getEnvVar('MAIL_FROM', 'noreply@patapesa-loan.com'),
-  MAIL_FROM_NAME: getEnvVar('MAIL_FROM_NAME', 'Patapesa Loan System'),
-
-  // Payment Gateway
-  PAYMENT_PROVIDER: getEnvVar('PAYMENT_PROVIDER', 'mpesa'),
-  MPESA_API_URL: getEnvVar('MPESA_API_URL', 'https://api.sandbox.safaricom.co.ke'),
-  MPESA_CONSUMER_KEY: getEnvVar('MPESA_CONSUMER_KEY', ''),
-  MPESA_CONSUMER_SECRET: getEnvVar('MPESA_CONSUMER_SECRET', ''),
-
-  // Security
-  CORS_ORIGIN: getEnvVar('CORS_ORIGIN', 'http://localhost:3000'),
-  CSRF_PROTECTION: getEnvBoolean('CSRF_PROTECTION', true),
-  HELMET_ENABLED: getEnvBoolean('HELMET_ENABLED', true),
-  RATE_LIMIT_ENABLED: getEnvBoolean('RATE_LIMIT_ENABLED', true),
+  // Logging
+  logging: {
+    level: () => getEnv().LOG_LEVEL,
+  },
 
   // Loan Configuration
-  MIN_LOAN_AMOUNT: getEnvNumber('MIN_LOAN_AMOUNT', 1000),
-  MAX_LOAN_AMOUNT: getEnvNumber('MAX_LOAN_AMOUNT', 1000000),
-  DEFAULT_INTEREST_RATE: getEnvNumber('DEFAULT_INTEREST_RATE', 0.18),
-  DEFAULT_LOAN_TERM_MONTHS: getEnvNumber('DEFAULT_LOAN_TERM_MONTHS', 12),
+  loan: {
+    maxAmount: () => getEnv().MAX_LOAN_AMOUNT,
+    minAmount: () => getEnv().MIN_LOAN_AMOUNT,
+    defaultInterestRate: () => getEnv().DEFAULT_INTEREST_RATE,
+    maxDurationMonths: () => getEnv().MAX_LOAN_DURATION_MONTHS,
+    minDurationMonths: () => getEnv().MIN_LOAN_DURATION_MONTHS,
+  },
+
+  // URLs
+  urls: {
+    frontend: () => getEnv().FRONTEND_URL,
+    adminPanel: () => getEnv().ADMIN_PANEL_URL,
+  },
+
+  // Features
+  features: {
+    enable2FA: () => getEnv().ENABLE_2FA,
+    enableEmailVerification: () => getEnv().ENABLE_EMAIL_VERIFICATION,
+    enableSmsNotifications: () => getEnv().ENABLE_SMS_NOTIFICATIONS,
+  },
 };
 
-export default env;
+export default getEnv;
