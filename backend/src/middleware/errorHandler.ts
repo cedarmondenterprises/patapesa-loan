@@ -22,7 +22,7 @@ interface ErrorResponse {
   status: 'error' | 'fail';
   statusCode: number;
   message: string;
-  ...[key: string]: any;
+  [key: string]: any;
 }
 
 /**
