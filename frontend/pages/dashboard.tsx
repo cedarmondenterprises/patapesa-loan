@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
@@ -15,6 +13,13 @@ import {
   FileText
 } from 'lucide-react';
 
+interface User {
+  firstName: string;
+  lastName: string;
+  email: string;
+  id: string;
+}
+
 interface LoanData {
   id: string;
   amount: number;
@@ -25,7 +30,7 @@ interface LoanData {
 
 const Dashboard: React.FC = () => {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loans, setLoans] = useState<LoanData[]>([]);
   const [loading, setLoading] = useState(true);
 

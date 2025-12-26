@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useCallback } from 'react';
 import Layout from '../components/Layout';
 import Button from '../components/Button';
