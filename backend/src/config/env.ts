@@ -1,196 +1,304 @@
 /**
- * Environment Configuration Module
- * Handles all environment variables and validation
+ * Environment Variable Management and Configuration
+ * 
+ * This module handles all environment variables and provides
+ * type-safe access to configuration values across the application.
  */
 
-import { z } from 'zod';
-
-/**
- * Define the schema for environment variables
- */
-const envSchema = z.object({
+interface EnvironmentConfig {
   // Node Environment
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  nodeEnv: 'development' | 'staging' | 'production' | 'test';
+  isDev: boolean;
+  isProd: boolean;
+  isTest: boolean;
 
   // Server Configuration
-  PORT: z.coerce.number().min(1).max(65535).default(3000),
-  HOST: z.string().default('0.0.0.0'),
+  port: number;
+  host: string;
+  baseUrl: string;
 
   // Database Configuration
-  DATABASE_URL: z.string().url('Invalid database URL'),
-  DB_HOST: z.string().default('localhost'),
-  DB_PORT: z.coerce.number().min(1).max(65535).default(5432),
-  DB_NAME: z.string(),
-  DB_USER: z.string(),
-  DB_PASSWORD: z.string(),
-  DB_SSL: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
+  database: {
+    url: string;
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    database: string;
+    ssl: boolean;
+    poolSize: number;
+    connectionTimeout: number;
+  };
 
-  // JWT Configuration
-  JWT_SECRET: z.string().min(32, 'JWT secret must be at least 32 characters'),
-  JWT_EXPIRE: z.string().default('24h'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT refresh secret must be at least 32 characters'),
-  JWT_REFRESH_EXPIRE: z.string().default('7d'),
+  // Authentication & Security
+  auth: {
+    jwtSecret: string;
+    jwtExpiration: string;
+    refreshTokenSecret: string;
+    refreshTokenExpiration: string;
+    bcryptRounds: number;
+  };
 
-  // API Configuration
-  API_VERSION: z.string().default('v1'),
-  API_PREFIX: z.string().default('/api'),
-  CORS_ORIGIN: z.string().default('*'),
+  // External Services
+  services: {
+    // Payment Gateway
+    paymentGateway: {
+      provider: string;
+      apiKey: string;
+      apiSecret: string;
+      merchantId: string;
+      webhookSecret: string;
+    };
+    // SMS Service
+    sms: {
+      provider: string;
+      apiKey: string;
+      apiUrl: string;
+      senderId: string;
+    };
+    // Email Service
+    email: {
+      provider: string;
+      apiKey: string;
+      fromAddress: string;
+      fromName: string;
+    };
+  };
 
-  // Logging
-  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+  // Logging Configuration
+  logging: {
+    level: 'error' | 'warn' | 'info' | 'debug' | 'trace';
+    format: string;
+    prettyPrint: boolean;
+  };
 
-  // Email Configuration (Optional for transactional emails)
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().optional(),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASSWORD: z.string().optional(),
-  SMTP_FROM: z.string().email().optional(),
+  // CORS Configuration
+  cors: {
+    enabled: boolean;
+    origins: string[];
+    credentials: boolean;
+  };
 
-  // Payment Gateway Configuration
-  PAYMENT_GATEWAY_URL: z.string().url().optional(),
-  PAYMENT_GATEWAY_API_KEY: z.string().optional(),
-  PAYMENT_GATEWAY_SECRET: z.string().optional(),
+  // Rate Limiting
+  rateLimit: {
+    enabled: boolean;
+    windowMs: number;
+    maxRequests: number;
+  };
 
-  // AWS/Cloud Configuration (Optional)
-  AWS_REGION: z.string().optional(),
-  AWS_ACCESS_KEY_ID: z.string().optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  S3_BUCKET: z.string().optional(),
-
-  // Third Party Services
-  TWILIO_ACCOUNT_SID: z.string().optional(),
-  TWILIO_AUTH_TOKEN: z.string().optional(),
-  TWILIO_PHONE_NUMBER: z.string().optional(),
-
-  // Redis Configuration (Optional)
-  REDIS_URL: z.string().url().optional(),
-  REDIS_HOST: z.string().optional(),
-  REDIS_PORT: z.coerce.number().optional(),
-  REDIS_PASSWORD: z.string().optional(),
-
-  // Application-specific Configuration
-  MAX_LOAN_AMOUNT: z.coerce.number().positive().default(1000000),
-  MIN_LOAN_AMOUNT: z.coerce.number().positive().default(1000),
-  DEFAULT_INTEREST_RATE: z.coerce.number().positive().default(5),
-  MAX_LOAN_DURATION_MONTHS: z.coerce.number().positive().int().default(60),
-  MIN_LOAN_DURATION_MONTHS: z.coerce.number().positive().int().default(1),
-
-  // Application URLs
-  FRONTEND_URL: z.string().url(),
-  ADMIN_PANEL_URL: z.string().url().optional(),
+  // File Upload
+  fileUpload: {
+    maxFileSize: number; // in bytes
+    allowedMimeTypes: string[];
+    uploadDir: string;
+  };
 
   // Feature Flags
-  ENABLE_2FA: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
-  ENABLE_EMAIL_VERIFICATION: z.enum(['true', 'false']).transform(val => val === 'true').default('true'),
-  ENABLE_SMS_NOTIFICATIONS: z.enum(['true', 'false']).transform(val => val === 'true').default('false'),
-});
+  features: {
+    enableSms: boolean;
+    enableEmail: boolean;
+    enablePayments: boolean;
+  };
+}
 
 /**
- * Type definition for environment variables
+ * Validate required environment variables
  */
-export type Environment = z.infer<typeof envSchema>;
+function validateEnvironment(): void {
+  const requiredVars = [
+    'NODE_ENV',
+    'PORT',
+    'DATABASE_URL',
+    'JWT_SECRET',
+    'REFRESH_TOKEN_SECRET',
+  ];
 
-/**
- * Parse and validate environment variables
- */
-function validateEnv(): Environment {
-  const env = { ...process.env };
+  const missing = requiredVars.filter(
+    (varName) => !process.env[varName]
+  );
 
-  const result = envSchema.safeParse(env);
-
-  if (!result.success) {
-    const errors = result.error.errors.map((error) => {
-      const path = error.path.join('.');
-      return `${path}: ${error.message}`;
-    });
-
+  if (missing.length > 0) {
     throw new Error(
-      `Invalid environment variables:\n${errors.join('\n')}`
+      `Missing required environment variables: ${missing.join(', ')}`
     );
   }
-
-  return result.data;
 }
 
 /**
- * Export validated environment configuration
+ * Parse and validate port number
  */
-let validatedEnv: Environment | null = null;
-
-export function getEnv(): Environment {
-  if (!validatedEnv) {
-    validatedEnv = validateEnv();
+function parsePort(value: string | undefined, defaultValue: number): number {
+  if (!value) return defaultValue;
+  const port = parseInt(value, 10);
+  if (isNaN(port) || port < 1 || port > 65535) {
+    throw new Error(`Invalid port number: ${value}`);
   }
-  return validatedEnv;
+  return port;
 }
 
 /**
- * Export individual helpers for common configurations
+ * Parse boolean environment variable
  */
-export const config = {
-  isDevelopment: () => getEnv().NODE_ENV === 'development',
-  isProduction: () => getEnv().NODE_ENV === 'production',
-  isStaging: () => getEnv().NODE_ENV === 'staging',
+function parseBoolean(value: string | undefined, defaultValue: boolean = false): boolean {
+  if (!value) return defaultValue;
+  return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
+}
 
-  // Server
-  server: {
-    port: () => getEnv().PORT,
-    host: () => getEnv().HOST,
-    isDev: () => config.isDevelopment(),
-  },
+/**
+ * Parse CSV string into array
+ */
+function parseCSV(value: string | undefined, defaultValue: string[] = []): string[] {
+  if (!value) return defaultValue;
+  return value.split(',').map((item) => item.trim()).filter((item) => item.length > 0);
+}
 
-  // Database
-  database: {
-    url: () => getEnv().DATABASE_URL,
-    host: () => getEnv().DB_HOST,
-    port: () => getEnv().DB_PORT,
-    name: () => getEnv().DB_NAME,
-    user: () => getEnv().DB_USER,
-    password: () => getEnv().DB_PASSWORD,
-    ssl: () => getEnv().DB_SSL,
-  },
+/**
+ * Load and parse all environment variables
+ */
+function loadConfig(): EnvironmentConfig {
+  validateEnvironment();
 
-  // JWT
-  jwt: {
-    secret: () => getEnv().JWT_SECRET,
-    expire: () => getEnv().JWT_EXPIRE,
-    refreshSecret: () => getEnv().JWT_REFRESH_SECRET,
-    refreshExpire: () => getEnv().JWT_REFRESH_EXPIRE,
-  },
+  const nodeEnv = (process.env.NODE_ENV || 'development') as EnvironmentConfig['nodeEnv'];
 
-  // API
-  api: {
-    version: () => getEnv().API_VERSION,
-    prefix: () => getEnv().API_PREFIX,
-    corsOrigin: () => getEnv().CORS_ORIGIN,
-  },
+  return {
+    // Node Environment
+    nodeEnv,
+    isDev: nodeEnv === 'development',
+    isProd: nodeEnv === 'production',
+    isTest: nodeEnv === 'test',
 
-  // Logging
-  logging: {
-    level: () => getEnv().LOG_LEVEL,
-  },
+    // Server Configuration
+    port: parsePort(process.env.PORT, 3000),
+    host: process.env.HOST || 'localhost',
+    baseUrl: process.env.BASE_URL || `http://localhost:${parsePort(process.env.PORT, 3000)}`,
 
-  // Loan Configuration
-  loan: {
-    maxAmount: () => getEnv().MAX_LOAN_AMOUNT,
-    minAmount: () => getEnv().MIN_LOAN_AMOUNT,
-    defaultInterestRate: () => getEnv().DEFAULT_INTEREST_RATE,
-    maxDurationMonths: () => getEnv().MAX_LOAN_DURATION_MONTHS,
-    minDurationMonths: () => getEnv().MIN_LOAN_DURATION_MONTHS,
-  },
+    // Database Configuration
+    database: {
+      url: process.env.DATABASE_URL || '',
+      host: process.env.DATABASE_HOST || 'localhost',
+      port: parsePort(process.env.DATABASE_PORT, 5432),
+      username: process.env.DATABASE_USER || 'postgres',
+      password: process.env.DATABASE_PASSWORD || '',
+      database: process.env.DATABASE_NAME || 'patapesa_loan',
+      ssl: parseBoolean(process.env.DATABASE_SSL, false),
+      poolSize: parseInt(process.env.DATABASE_POOL_SIZE || '10', 10),
+      connectionTimeout: parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '5000', 10),
+    },
 
-  // URLs
-  urls: {
-    frontend: () => getEnv().FRONTEND_URL,
-    adminPanel: () => getEnv().ADMIN_PANEL_URL,
-  },
+    // Authentication & Security
+    auth: {
+      jwtSecret: process.env.JWT_SECRET || '',
+      jwtExpiration: process.env.JWT_EXPIRATION || '24h',
+      refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || '',
+      refreshTokenExpiration: process.env.REFRESH_TOKEN_EXPIRATION || '7d',
+      bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '10', 10),
+    },
 
-  // Features
-  features: {
-    enable2FA: () => getEnv().ENABLE_2FA,
-    enableEmailVerification: () => getEnv().ENABLE_EMAIL_VERIFICATION,
-    enableSmsNotifications: () => getEnv().ENABLE_SMS_NOTIFICATIONS,
-  },
-};
+    // External Services
+    services: {
+      paymentGateway: {
+        provider: process.env.PAYMENT_PROVIDER || 'stripe',
+        apiKey: process.env.PAYMENT_API_KEY || '',
+        apiSecret: process.env.PAYMENT_API_SECRET || '',
+        merchantId: process.env.PAYMENT_MERCHANT_ID || '',
+        webhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || '',
+      },
+      sms: {
+        provider: process.env.SMS_PROVIDER || 'twilio',
+        apiKey: process.env.SMS_API_KEY || '',
+        apiUrl: process.env.SMS_API_URL || '',
+        senderId: process.env.SMS_SENDER_ID || 'PataPesa',
+      },
+      email: {
+        provider: process.env.EMAIL_PROVIDER || 'sendgrid',
+        apiKey: process.env.EMAIL_API_KEY || '',
+        fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@patapesa.com',
+        fromName: process.env.EMAIL_FROM_NAME || 'PataPesa',
+      },
+    },
 
-export default getEnv;
+    // Logging Configuration
+    logging: {
+      level: (process.env.LOG_LEVEL || 'info') as EnvironmentConfig['logging']['level'],
+      format: process.env.LOG_FORMAT || 'json',
+      prettyPrint: parseBoolean(process.env.LOG_PRETTY_PRINT, nodeEnv === 'development'),
+    },
+
+    // CORS Configuration
+    cors: {
+      enabled: parseBoolean(process.env.CORS_ENABLED, true),
+      origins: parseCSV(process.env.CORS_ORIGINS, ['http://localhost:3000']),
+      credentials: parseBoolean(process.env.CORS_CREDENTIALS, true),
+    },
+
+    // Rate Limiting
+    rateLimit: {
+      enabled: parseBoolean(process.env.RATE_LIMIT_ENABLED, true),
+      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
+      maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
+    },
+
+    // File Upload
+    fileUpload: {
+      maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10), // 5MB default
+      allowedMimeTypes: parseCSV(
+        process.env.ALLOWED_MIME_TYPES,
+        ['application/pdf', 'image/jpeg', 'image/png', 'application/msword']
+      ),
+      uploadDir: process.env.UPLOAD_DIR || './uploads',
+    },
+
+    // Feature Flags
+    features: {
+      enableSms: parseBoolean(process.env.FEATURE_ENABLE_SMS, true),
+      enableEmail: parseBoolean(process.env.FEATURE_ENABLE_EMAIL, true),
+      enablePayments: parseBoolean(process.env.FEATURE_ENABLE_PAYMENTS, true),
+    },
+  };
+}
+
+// Load configuration once at module initialization
+let config: EnvironmentConfig;
+
+try {
+  config = loadConfig();
+} catch (error) {
+  console.error('Failed to load environment configuration:', error);
+  process.exit(1);
+}
+
+/**
+ * Export the configuration object
+ */
+export default config;
+
+/**
+ * Export typed configuration getter for type safety
+ */
+export const getConfig = (): EnvironmentConfig => config;
+
+/**
+ * Export individual configuration sections for convenience
+ */
+export const {
+  nodeEnv,
+  isDev,
+  isProd,
+  isTest,
+  port,
+  host,
+  baseUrl,
+  database,
+  auth,
+  services,
+  logging,
+  cors,
+  rateLimit,
+  fileUpload,
+  features,
+} = config;
+
+/**
+ * Type export for use in other modules
+ */
+export type { EnvironmentConfig };
