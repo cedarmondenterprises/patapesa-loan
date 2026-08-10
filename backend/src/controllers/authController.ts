@@ -80,7 +80,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email } = req.body;
+    const { email, type } = req.body;
     const db = getDatabase();
 
     const user = await db.queryOne('SELECT id FROM users WHERE email = $1', [email]);
@@ -88,11 +88,12 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     if (user) {
       const resetCode = crypto.randomInt(100000, 999999).toString();
       const codeExpiry = new Date(Date.now() + 30 * 60 * 1000);
+      const codeType = type || 'password_reset';
       await db.query(
         `INSERT INTO verification_codes (user_id, code, type, expires_at, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-        [user.id, resetCode, 'password_reset', codeExpiry]
+        [user.id, resetCode, codeType, codeExpiry]
       );
-      logger.info(`Password reset code sent to: ${email}`);
+      logger.info(`Password reset code sent to: ${email} (type=${codeType})`);
     }
 
     res.status(200).json({ success: true, message: 'If email exists, password reset code has been sent' });
@@ -104,14 +105,15 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
 
 export const verifyCode = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, code } = req.body;
+    const { email, code, type } = req.body;
     const db = getDatabase();
+    const codeType = type || 'password_reset';
 
     const result = await db.queryOne(
       `SELECT u.id, vc.id as code_id, vc.expires_at FROM users u
        JOIN verification_codes vc ON u.id = vc.user_id
-       WHERE u.email = $1 AND vc.code = $2 AND vc.type = 'password_reset'`,
-      [email, code]
+       WHERE u.email = $1 AND vc.code = $2 AND vc.type = $3`,
+      [email, code, codeType]
     );
 
     if (!result || new Date(result.expires_at) < new Date()) {
@@ -119,7 +121,17 @@ export const verifyCode = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    logger.info(`Code verified for: ${email}`);
+    // If this is an email verification code, mark the user's email as verified and delete the code
+    if (codeType === 'email_verification') {
+      await db.query('UPDATE users SET email_verified = true, updated_at = NOW() WHERE id = $1', [result.id]);
+      await db.query('DELETE FROM verification_codes WHERE id = $1', [result.code_id]);
+      logger.info(`Email verified for: ${email}`);
+      res.status(200).json({ success: true, message: 'Email verified successfully' });
+      return;
+    }
+
+    // For password reset verification, just confirm the code is valid
+    logger.info(`Code verified for: ${email} (type=${codeType})`);
     res.status(200).json({ success: true, message: 'Code verified successfully' });
   } catch (error) {
     logger.error('Code verification error', error);
