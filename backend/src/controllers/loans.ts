@@ -83,11 +83,20 @@ export const getLoanById = asyncHandler(async (req: Request, res: Response) => {
 });
 
 // Get all loans (admin only)
-export const getAllLoans = asyncHandler(async (_req: Request, res: Response) => {
-  // TODO: Implement pagination and filters
+export const getAllLoans = asyncHandler(async (req: Request, res: Response) => {
+  // Expect query params: page, limit, status, userId, loanNumber
+  const page = parseInt((req.query.page as string) || '1', 10);
+  const limit = parseInt((req.query.limit as string) || '20', 10);
+  const status = (req.query.status as string) || undefined;
+  const userId = (req.query.userId as string) || undefined;
+  const loanNumber = (req.query.loanNumber as string) || undefined;
+
+  const result = await loanService.getAllLoans({ page, limit, status, userId, loanNumber });
+
   res.status(200).json({
     success: true,
-    message: 'Get all loans endpoint (to be implemented with pagination)',
+    data: result.data,
+    meta: { total: result.total, page: result.page, limit: result.limit },
   } as ApiResponse);
 });
 
@@ -177,12 +186,28 @@ export const getLoanRepayments = asyncHandler(async (req: Request, res: Response
 });
 
 // Make loan repayment
-export const makeRepayment = asyncHandler(async (_req: Request, res: Response) => {
-  // TODO: Implement repayment logic
-  res.status(200).json({
-    success: true,
-    message: 'Make repayment endpoint (to be implemented)',
-  } as ApiResponse);
+export const makeRepayment = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    res.status(401).json({ success: false, message: 'Not authenticated' } as ApiResponse);
+    return;
+  }
+
+  const { id } = req.params; // loan id
+  const { amount, paymentMethod, paymentReference } = req.body;
+
+  const parsedAmount = parseFloat(amount);
+  if (!parsedAmount || parsedAmount <= 0) {
+    res.status(400).json({ success: false, message: 'Invalid payment amount' } as ApiResponse);
+    return;
+  }
+
+  const result = await loanService.makeRepayment(id, req.user.userId, {
+    amount: parsedAmount,
+    paymentMethod,
+    paymentReference,
+  });
+
+  res.status(200).json({ success: true, message: 'Repayment recorded', data: result } as ApiResponse);
 });
 
 export default {
