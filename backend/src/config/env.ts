@@ -1,304 +1,74 @@
-/**
- * Environment Variable Management and Configuration
- * 
- * This module handles all environment variables and provides
- * type-safe access to configuration values across the application.
- */
+import dotenv from 'dotenv';
 
-interface EnvironmentConfig {
-  // Node Environment
-  nodeEnv: 'development' | 'staging' | 'production' | 'test';
-  isDev: boolean;
-  isProd: boolean;
-  isTest: boolean;
+dotenv.config();
 
-  // Server Configuration
-  port: number;
-  host: string;
-  baseUrl: string;
+export const env = {
+  // Application
+  NODE_ENV: process.env.NODE_ENV || 'development',
+  APP_PORT: parseInt(process.env.APP_PORT || '5000', 10),
+  API_BASE_URL: process.env.API_BASE_URL || '/api/v1',
+  API_VERSION: process.env.API_VERSION || '1.0.0',
 
-  // Database Configuration
-  database: {
-    url: string;
-    host: string;
-    port: number;
-    username: string;
-    password: string;
-    database: string;
-    ssl: boolean;
-    poolSize: number;
-    connectionTimeout: number;
-  };
+  // Database
+  DB_HOST: process.env.DB_HOST || 'localhost',
+  DB_PORT: parseInt(process.env.DB_PORT || '5432', 10),
+  DB_USER: process.env.DB_USER || 'patapesa',
+  DB_PASSWORD: process.env.DB_PASSWORD || 'patapesa_dev_password',
+  DB_NAME: process.env.DB_NAME || 'patapesa_db',
+  DATABASE_URL: process.env.DATABASE_URL || 'postgresql://patapesa:patapesa_dev_password@localhost:5432/patapesa_db',
 
-  // Authentication & Security
-  auth: {
-    jwtSecret: string;
-    jwtExpiration: string;
-    refreshTokenSecret: string;
-    refreshTokenExpiration: string;
-    bcryptRounds: number;
-  };
+  // Redis
+  REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+  REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379', 10),
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD || 'redis_dev_password',
+  REDIS_URL: process.env.REDIS_URL || 'redis://default:redis_dev_password@localhost:6379/0',
 
-  // External Services
-  services: {
-    // Payment Gateway
-    paymentGateway: {
-      provider: string;
-      apiKey: string;
-      apiSecret: string;
-      merchantId: string;
-      webhookSecret: string;
-    };
-    // SMS Service
-    sms: {
-      provider: string;
-      apiKey: string;
-      apiUrl: string;
-      senderId: string;
-    };
-    // Email Service
-    email: {
-      provider: string;
-      apiKey: string;
-      fromAddress: string;
-      fromName: string;
-    };
-  };
+  // JWT
+  JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-key-change-in-production',
+  JWT_EXPIRY: process.env.JWT_EXPIRY || '24h',
 
-  // Logging Configuration
-  logging: {
-    level: 'error' | 'warn' | 'info' | 'debug' | 'trace';
-    format: string;
-    prettyPrint: boolean;
-  };
+  // CORS
+  CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:8080',
 
-  // CORS Configuration
-  cors: {
-    enabled: boolean;
-    origins: string[];
-    credentials: boolean;
-  };
+  // Security
+  HELMET_ENABLED: process.env.HELMET_ENABLED !== 'false',
+  RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
+  API_RATE_LIMIT_WINDOW: parseInt(process.env.API_RATE_LIMIT_WINDOW || '15', 10),
+  API_RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS || '100', 10),
 
-  // Rate Limiting
-  rateLimit: {
-    enabled: boolean;
-    windowMs: number;
-    maxRequests: number;
-  };
+  // Logging
+  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+
+  // Email Configuration
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
+  EMAIL_FROM: process.env.EMAIL_FROM || 'noreply@patapesa-loan.com',
+
+  // SMS Configuration
+  SMS_PROVIDER: process.env.SMS_PROVIDER || 'twilio',
+  TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID || '',
+  TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN || '',
+  TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER || '',
+
+  // Payment Gateway
+  PAYMENT_GATEWAY: process.env.PAYMENT_GATEWAY || 'stripe',
+  STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY || '',
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY || '',
+
+  // Credit Scoring
+  ENABLE_ML_SCORING: process.env.ENABLE_ML_SCORING === 'true',
 
   // File Upload
-  fileUpload: {
-    maxFileSize: number; // in bytes
-    allowedMimeTypes: string[];
-    uploadDir: string;
-  };
+  MAX_FILE_SIZE: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10), // 5MB default
+  ALLOWED_FILE_TYPES: (process.env.ALLOWED_FILE_TYPES || 'pdf,jpg,jpeg,png').split(','),
+
+  // Monitoring
+  SENTRY_DSN: process.env.SENTRY_DSN || '',
 
   // Feature Flags
-  features: {
-    enableSms: boolean;
-    enableEmail: boolean;
-    enablePayments: boolean;
-  };
-}
-
-/**
- * Validate required environment variables
- */
-function validateEnvironment(): void {
-  const requiredVars = [
-    'NODE_ENV',
-    'PORT',
-    'DATABASE_URL',
-    'JWT_SECRET',
-    'REFRESH_TOKEN_SECRET',
-  ];
-
-  const missing = requiredVars.filter(
-    (varName) => !process.env[varName]
-  );
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing required environment variables: ${missing.join(', ')}`
-    );
-  }
-}
-
-/**
- * Parse and validate port number
- */
-function parsePort(value: string | undefined, defaultValue: number): number {
-  if (!value) return defaultValue;
-  const port = parseInt(value, 10);
-  if (isNaN(port) || port < 1 || port > 65535) {
-    throw new Error(`Invalid port number: ${value}`);
-  }
-  return port;
-}
-
-/**
- * Parse boolean environment variable
- */
-function parseBoolean(value: string | undefined, defaultValue: boolean = false): boolean {
-  if (!value) return defaultValue;
-  return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
-}
-
-/**
- * Parse CSV string into array
- */
-function parseCSV(value: string | undefined, defaultValue: string[] = []): string[] {
-  if (!value) return defaultValue;
-  return value.split(',').map((item) => item.trim()).filter((item) => item.length > 0);
-}
-
-/**
- * Load and parse all environment variables
- */
-function loadConfig(): EnvironmentConfig {
-  validateEnvironment();
-
-  const nodeEnv = (process.env.NODE_ENV || 'development') as EnvironmentConfig['nodeEnv'];
-
-  return {
-    // Node Environment
-    nodeEnv,
-    isDev: nodeEnv === 'development',
-    isProd: nodeEnv === 'production',
-    isTest: nodeEnv === 'test',
-
-    // Server Configuration
-    port: parsePort(process.env.PORT, 3000),
-    host: process.env.HOST || 'localhost',
-    baseUrl: process.env.BASE_URL || `http://localhost:${parsePort(process.env.PORT, 3000)}`,
-
-    // Database Configuration
-    database: {
-      url: process.env.DATABASE_URL || '',
-      host: process.env.DATABASE_HOST || 'localhost',
-      port: parsePort(process.env.DATABASE_PORT, 5432),
-      username: process.env.DATABASE_USER || 'postgres',
-      password: process.env.DATABASE_PASSWORD || '',
-      database: process.env.DATABASE_NAME || 'patapesa_loan',
-      ssl: parseBoolean(process.env.DATABASE_SSL, false),
-      poolSize: parseInt(process.env.DATABASE_POOL_SIZE || '10', 10),
-      connectionTimeout: parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '5000', 10),
-    },
-
-    // Authentication & Security
-    auth: {
-      jwtSecret: process.env.JWT_SECRET || '',
-      jwtExpiration: process.env.JWT_EXPIRATION || '24h',
-      refreshTokenSecret: process.env.REFRESH_TOKEN_SECRET || '',
-      refreshTokenExpiration: process.env.REFRESH_TOKEN_EXPIRATION || '7d',
-      bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '10', 10),
-    },
-
-    // External Services
-    services: {
-      paymentGateway: {
-        provider: process.env.PAYMENT_PROVIDER || 'stripe',
-        apiKey: process.env.PAYMENT_API_KEY || '',
-        apiSecret: process.env.PAYMENT_API_SECRET || '',
-        merchantId: process.env.PAYMENT_MERCHANT_ID || '',
-        webhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || '',
-      },
-      sms: {
-        provider: process.env.SMS_PROVIDER || 'twilio',
-        apiKey: process.env.SMS_API_KEY || '',
-        apiUrl: process.env.SMS_API_URL || '',
-        senderId: process.env.SMS_SENDER_ID || 'PataPesa',
-      },
-      email: {
-        provider: process.env.EMAIL_PROVIDER || 'sendgrid',
-        apiKey: process.env.EMAIL_API_KEY || '',
-        fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@patapesa.com',
-        fromName: process.env.EMAIL_FROM_NAME || 'PataPesa',
-      },
-    },
-
-    // Logging Configuration
-    logging: {
-      level: (process.env.LOG_LEVEL || 'info') as EnvironmentConfig['logging']['level'],
-      format: process.env.LOG_FORMAT || 'json',
-      prettyPrint: parseBoolean(process.env.LOG_PRETTY_PRINT, nodeEnv === 'development'),
-    },
-
-    // CORS Configuration
-    cors: {
-      enabled: parseBoolean(process.env.CORS_ENABLED, true),
-      origins: parseCSV(process.env.CORS_ORIGINS, ['http://localhost:3000']),
-      credentials: parseBoolean(process.env.CORS_CREDENTIALS, true),
-    },
-
-    // Rate Limiting
-    rateLimit: {
-      enabled: parseBoolean(process.env.RATE_LIMIT_ENABLED, true),
-      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10), // 15 minutes
-      maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
-    },
-
-    // File Upload
-    fileUpload: {
-      maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '5242880', 10), // 5MB default
-      allowedMimeTypes: parseCSV(
-        process.env.ALLOWED_MIME_TYPES,
-        ['application/pdf', 'image/jpeg', 'image/png', 'application/msword']
-      ),
-      uploadDir: process.env.UPLOAD_DIR || './uploads',
-    },
-
-    // Feature Flags
-    features: {
-      enableSms: parseBoolean(process.env.FEATURE_ENABLE_SMS, true),
-      enableEmail: parseBoolean(process.env.FEATURE_ENABLE_EMAIL, true),
-      enablePayments: parseBoolean(process.env.FEATURE_ENABLE_PAYMENTS, true),
-    },
-  };
-}
-
-// Load configuration once at module initialization
-let config: EnvironmentConfig;
-
-try {
-  config = loadConfig();
-} catch (error) {
-  console.error('Failed to load environment configuration:', error);
-  process.exit(1);
-}
-
-/**
- * Export the configuration object
- */
-export default config;
-
-/**
- * Export typed configuration getter for type safety
- */
-export const getConfig = (): EnvironmentConfig => config;
-
-/**
- * Export individual configuration sections for convenience
- */
-export const {
-  nodeEnv,
-  isDev,
-  isProd,
-  isTest,
-  port,
-  host,
-  baseUrl,
-  database,
-  auth,
-  services,
-  logging,
-  cors,
-  rateLimit,
-  fileUpload,
-  features,
-} = config;
-
-/**
- * Type export for use in other modules
- */
-export type { EnvironmentConfig };
+  ENABLE_KYC: process.env.ENABLE_KYC !== 'false',
+  ENABLE_REPAYMENT: process.env.ENABLE_REPAYMENT !== 'false',
+  ENABLE_NOTIFICATIONS: process.env.ENABLE_NOTIFICATIONS !== 'false',
+};
