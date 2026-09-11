@@ -1,0 +1,21 @@
+import express, { NextFunction, Request, Response } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
+import routes from './core/routes';
+import { config } from './core/config';
+import { pool } from './core/db';
+
+const app = express();
+app.set('trust proxy', 1);
+app.use(helmet());
+app.use(cors({ origin: (origin, callback) => callback(null, !origin || config.corsOrigins.includes(origin)), credentials: true }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 150, standardHeaders: true, legacyHeaders: false }));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(express.json({ limit: '1mb' }));
+app.get('/api/health', async (_req,res)=>{try{await pool.query('SELECT 1');res.json({status:'healthy',database:'connected',timestamp:new Date().toISOString()});}catch{res.status(503).json({status:'unhealthy',database:'unavailable',timestamp:new Date().toISOString()});}});
+app.use('/api', routes);
+app.use((_req,res)=>res.status(404).json({success:false,message:'Route not found'}));
+app.use((error:Error,_req:Request,res:Response,_next:NextFunction)=>{console.error(error);res.status(500).json({success:false,message:process.env.NODE_ENV==='production'?'An unexpected error occurred':error.message});});
+export default app;

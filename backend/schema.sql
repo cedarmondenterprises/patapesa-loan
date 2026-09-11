@@ -2,6 +2,8 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE SEQUENCE IF NOT EXISTS support_reference_seq START 1000;
+
 -- Users table
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -28,6 +30,18 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+
+CREATE TABLE IF NOT EXISTS support_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    reference VARCHAR(30) NOT NULL UNIQUE DEFAULT ('SUP-' || to_char(CURRENT_DATE, 'YYYYMMDD') || '-' || nextval('support_reference_seq')),
+    name VARCHAR(120) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    subject VARCHAR(160) NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','IN_PROGRESS','RESOLVED','CLOSED')),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- User profiles extended
 CREATE TABLE IF NOT EXISTS user_profiles (
@@ -402,3 +416,10 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+
+INSERT INTO loan_products(product_code,name,description,min_amount,max_amount,min_term,max_term,interest_rate,processing_fee,late_payment_fee,currency)
+VALUES
+ ('QUICK_CASH','Emergency loan','Short-term credit for urgent, essential expenses.',1000,50000,1,6,18,3,5,'KES'),
+ ('PERSONAL','Personal loan','Flexible credit for planned personal expenses.',10000,500000,3,24,15,2.5,5,'KES'),
+ ('BUSINESS','Business loan','Working capital for established small businesses.',50000,1000000,6,36,12,2,5,'KES')
+ON CONFLICT(product_code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,min_amount=EXCLUDED.min_amount,max_amount=EXCLUDED.max_amount,min_term=EXCLUDED.min_term,max_term=EXCLUDED.max_term,interest_rate=EXCLUDED.interest_rate,processing_fee=EXCLUDED.processing_fee,status='ACTIVE',updated_at=NOW();

@@ -1,0 +1,9 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": { "project": "./tsconfig.json", "sourceType": "module" },
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "env": { "node": true, "es2020": true },
+  "ignorePatterns": ["dist", "src/controllers", "src/services", "src/routes", "src/middleware", "src/utils", "src/config", "src/validators", "src/types", "src/constants", "src/enums"]
+}

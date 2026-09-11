@@ -1,120 +1,12 @@
-import React, { ReactNode } from 'react';
 import Head from 'next/head';
+import Link from 'next/link';
+import { ReactNode } from 'react';
 
-interface LayoutProps {
-  children: ReactNode;
-  title?: string;
-  description?: string;
+export default function Layout({ children, title='PataPesa', description='Transparent digital loan applications in Kenya' }: {children:ReactNode;title?:string;description?:string}) {
+  return <><Head><title>{title}</title><meta name="description" content={description}/><meta name="viewport" content="width=device-width, initial-scale=1"/></Head>
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <header className="sticky top-0 z-20 border-b bg-white/95 backdrop-blur"><nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4"><Link href="/" className="text-2xl font-black text-emerald-700">PataPesa</Link><div className="flex items-center gap-2"><Link href="/loans" className="px-3 py-2 text-sm font-semibold">Loans</Link><Link href="/login" className="px-3 py-2 text-sm font-semibold">Login</Link><Link href="/register" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Create account</Link></div></nav></header>
+      <main className="mx-auto max-w-6xl px-4 py-10">{children}</main>
+      <footer className="mt-16 border-t bg-slate-950 text-slate-300"><div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-3"><div><p className="text-xl font-bold text-white">PataPesa</p><p className="mt-2 text-sm">Transparent applications for eligible Kenyan borrowers. Every loan is subject to review and approval.</p></div><div className="flex flex-col gap-2 text-sm"><Link href="/about">About</Link><Link href="/faq">Frequently asked questions</Link><Link href="/contact">Contact support</Link></div><div className="flex flex-col gap-2 text-sm"><Link href="/terms">Terms</Link><Link href="/privacy">Privacy</Link><span>© {new Date().getFullYear()} PataPesa</span></div></div></footer>
+    </div></>;
 }
-
-const Layout: React.FC<LayoutProps> = ({
-  children,
-  title = 'Patapesa Loan',
-  description = 'Digital lending platform for fast and secure loans',
-}) => {
-  return (
-    <>
-      <Head>
-        <title>{title}</title>
-        <meta name="description" content={description} />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-
-      <div className="min-h-screen bg-gray-50">
-        {/* Header */}
-        <header className="bg-white shadow-sm">
-          <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-16">
-              <div className="flex items-center">
-                <h1 className="text-2xl font-bold text-blue-600">Patapesa Loan</h1>
-              </div>
-              <div className="flex items-center space-x-4">
-                <a
-                  href="/login"
-                  className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
-                >
-                  Login
-                </a>
-                <a
-                  href="/register"
-                  className="bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md text-sm font-medium"
-                >
-                  Sign Up
-                </a>
-              </div>
-            </div>
-          </nav>
-        </header>
-
-        {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </main>
-
-        {/* Footer */}
-        <footer className="bg-white border-t border-gray-200 mt-12">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Patapesa Loan
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  Fast, secure, and reliable digital lending platform for your financial needs.
-                </p>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-4">Quick Links</h4>
-                <ul className="space-y-2">
-                  <li>
-                    <a href="/about" className="text-gray-600 hover:text-blue-600 text-sm">
-                      About Us
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/loans" className="text-gray-600 hover:text-blue-600 text-sm">
-                      Loan Products
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/contact" className="text-gray-600 hover:text-blue-600 text-sm">
-                      Contact
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/faq" className="text-gray-600 hover:text-blue-600 text-sm">
-                      FAQ
-                    </a>
-                  </li>
-                </ul>
-              </div>
-              <div>
-                <h4 className="text-sm font-semibold text-gray-900 mb-4">Legal</h4>
-                <ul className="space-y-2">
-                  <li>
-                    <a href="/privacy" className="text-gray-600 hover:text-blue-600 text-sm">
-                      Privacy Policy
-                    </a>
-                  </li>
-                  <li>
-                    <a href="/terms" className="text-gray-600 hover:text-blue-600 text-sm">
-                      Terms of Service
-                    </a>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            <div className="mt-8 pt-8 border-t border-gray-200">
-              <p className="text-center text-gray-500 text-sm">
-                © {new Date().getFullYear()} Patapesa Loan. All rights reserved.
-              </p>
-            </div>
-          </div>
-        </footer>
-      </div>
-    </>
-  );
-};
-
-export default Layout;
