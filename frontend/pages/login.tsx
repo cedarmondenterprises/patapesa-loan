@@ -1,13 +1,14 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
-import Layout from '../components/Layout';
+import AuthShell from '../components/AuthShell';
 import { api } from '../lib/api';
 
 export default function Login() {
-  const router = useRouter();
-  const [message, setMessage] = useState('');
-  const [loading, setLoading] = useState(false);
+  const router = useRouter(),
+    [message, setMessage] = useState(''),
+    [loading, setLoading] = useState(false),
+    [show, setShow] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -24,64 +25,74 @@ export default function Login() {
       });
       await router.push('/dashboard');
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Login failed');
+      setMessage(error instanceof Error ? error.message : 'Sign in failed');
     } finally {
       setLoading(false);
     }
   }
   return (
-    <Layout title="Login | PataPesa">
-      <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-black">Welcome back</h1>
-        <p className="mt-2 text-slate-500">Access your application securely.</p>
-        {message && (
-          <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {message}
-          </p>
-        )}
-        <form className="mt-7 space-y-5" onSubmit={submit}>
-          <label className="block text-sm font-bold">
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="mt-2 w-full rounded-lg border p-3"
-            />
-          </label>
-          <label className="block text-sm font-bold">
-            Password
+    <AuthShell
+      title="Sign in"
+      eyebrow="Your PataPesa account"
+      heading="Pick up exactly where you left off."
+      copy="Review an application, complete identity verification and see every lending decision in one secure place."
+    >
+      <p className="eyebrow">Customer sign in</p>
+      <h2 className="mt-3 text-3xl font-bold tracking-[-.025em] text-pata-950">Welcome back</h2>
+      <p className="mt-2 text-sm text-slate-500">Enter the details used when you registered.</p>
+      {message && (
+        <p role="alert" className="notice notice-error mt-6">
+          {message}
+        </p>
+      )}
+      <form className="mt-8 space-y-5" onSubmit={submit}>
+        <label className="field">
+          <span>Email address</span>
+          <input
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="name@example.com"
+          />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <div className="relative">
             <input
               name="password"
-              type="password"
+              type={show ? 'text' : 'password'}
               required
               autoComplete="current-password"
-              className="mt-2 w-full rounded-lg border p-3"
+              className="pr-16"
             />
-          </label>
-          <div className="flex items-center justify-between">
-            <label className="flex gap-2 text-sm">
-              <input name="remember" type="checkbox" defaultChecked /> Keep me signed in
-            </label>
-            <Link href="/forgot-password" className="text-sm font-bold text-emerald-700">
-              Forgot password?
-            </Link>
+            <button
+              type="button"
+              className="absolute right-3 top-3 text-xs font-bold text-pata-700"
+              onClick={() => setShow(!show)}
+            >
+              {show ? 'Hide' : 'Show'}
+            </button>
           </div>
-          <button
-            disabled={loading}
-            className="w-full rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
-        <p className="mt-5 text-sm">
-          No account?{' '}
-          <Link className="font-bold text-emerald-700" href="/register">
-            Create one
+        </label>
+        <div className="flex items-center justify-between">
+          <label className="flex gap-2 text-sm text-slate-600">
+            <input name="remember" type="checkbox" defaultChecked /> Keep me signed in
+          </label>
+          <Link href="/forgot-password" className="text-sm font-bold text-pata-700">
+            Forgot password?
           </Link>
-        </p>
-      </div>
-    </Layout>
+        </div>
+        <button disabled={loading} className="button button-primary w-full">
+          {loading ? 'Signing in…' : 'Sign in securely'}
+        </button>
+      </form>
+      <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">
+        New to PataPesa?{' '}
+        <Link className="font-bold text-pata-700" href="/register">
+          Create an account
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

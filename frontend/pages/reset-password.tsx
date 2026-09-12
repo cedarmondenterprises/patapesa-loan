@@ -33,27 +33,22 @@ export default function ResetPassword() {
   }
   return (
     <Layout title="Reset password | PataPesa">
-      <div className="mx-auto max-w-lg rounded-2xl border bg-white p-8">
-        <h1 className="text-3xl font-black">Choose a new password</h1>
+      <div className="surface mx-auto max-w-lg border-t-4 border-t-pata-900 p-8 shadow-quiet">
+        <p className="eyebrow">Secure access</p>
+        <h1 className="mt-3 text-3xl font-bold text-pata-950">Choose a new password</h1>
         {message && (
-          <p
-            role="status"
-            className={`mt-5 rounded-lg p-4 ${done ? 'bg-emerald-50' : 'bg-red-50'}`}
-          >
+          <p role="status" className={`notice mt-5 ${done ? 'notice-success' : 'notice-error'}`}>
             {message}
           </p>
         )}
         {done ? (
-          <Link
-            href="/login"
-            className="mt-6 inline-block rounded-lg bg-emerald-700 px-5 py-3 font-bold text-white"
-          >
+          <Link href="/login" className="button button-primary mt-6">
             Continue to sign in
           </Link>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <label className="block text-sm font-bold">
-              New password
+            <label className="field">
+              <span>New password</span>
               <input
                 name="password"
                 type="password"
@@ -61,11 +56,10 @@ export default function ResetPassword() {
                 minLength={10}
                 maxLength={128}
                 autoComplete="new-password"
-                className="mt-2 w-full rounded-lg border p-3"
               />
             </label>
-            <label className="block text-sm font-bold">
-              Confirm password
+            <label className="field">
+              <span>Confirm password</span>
               <input
                 name="confirm"
                 type="password"
@@ -73,12 +67,11 @@ export default function ResetPassword() {
                 minLength={10}
                 maxLength={128}
                 autoComplete="new-password"
-                className="mt-2 w-full rounded-lg border p-3"
               />
             </label>
             <button
               disabled={loading || !router.query.token}
-              className="w-full rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60"
+              className="button button-primary w-full disabled:opacity-60"
             >
               {loading ? 'Changing…' : 'Change password'}
             </button>

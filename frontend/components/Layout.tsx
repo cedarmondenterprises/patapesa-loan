@@ -1,6 +1,8 @@
 import Head from 'next/head';
 import Link from 'next/link';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
+import { useRouter } from 'next/router';
+import Brand from './Brand';
 
 export default function Layout({
   children,
@@ -11,55 +13,91 @@ export default function Layout({
   title?: string;
   description?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const nav = [
+    ['/', 'Home'],
+    ['/loans', 'Loans'],
+    ['/about', 'About'],
+    ['/faq', 'Help'],
+  ];
   return (
     <>
       <Head>
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#123c32" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content="/social-preview.svg" />
+        <link rel="icon" href="/favicon.svg" />
       </Head>
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <header className="sticky top-0 z-20 border-b bg-white/95 backdrop-blur">
-          <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-            <Link href="/" className="text-2xl font-black text-emerald-700">
-              PataPesa
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link href="/loans" className="px-3 py-2 text-sm font-semibold">
-                Loans
+      <div className="site-shell">
+        <header className="site-header">
+          <nav className="site-nav" aria-label="Main navigation">
+            <Brand />
+            <div className="desktop-nav">
+              {nav.map(([href, label]) => (
+                <Link key={href} href={href} className={router.pathname === href ? 'active' : ''}>
+                  {label}
+                </Link>
+              ))}
+            </div>
+            <div className="nav-actions">
+              <Link href="/login" className="text-link">
+                Sign in
               </Link>
-              <Link href="/login" className="px-3 py-2 text-sm font-semibold">
-                Login
+              <Link href="/register" className="button button-primary button-small">
+                Apply now
               </Link>
-              <Link
-                href="/register"
-                className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+              <button
+                className="menu-button"
+                aria-label="Toggle navigation"
+                aria-expanded={open}
+                onClick={() => setOpen(!open)}
               >
-                Create account
-              </Link>
+                <span />
+                <span />
+                <span />
+              </button>
             </div>
           </nav>
+          {open && (
+            <div className="mobile-nav">
+              {nav.map(([href, label]) => (
+                <Link key={href} href={href} onClick={() => setOpen(false)}>
+                  {label}
+                </Link>
+              ))}
+              <Link href="/login">Sign in</Link>
+            </div>
+          )}
         </header>
-        <main className="mx-auto max-w-6xl px-4 py-10">{children}</main>
-        <footer className="mt-16 border-t bg-slate-950 text-slate-300">
-          <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 md:grid-cols-3">
+        <main className="site-main">{children}</main>
+        <footer className="site-footer">
+          <div className="footer-grid">
             <div>
-              <p className="text-xl font-bold text-white">PataPesa</p>
-              <p className="mt-2 text-sm">
-                Transparent applications for eligible Kenyan borrowers. Every loan is subject to
-                review and approval.
+              <Brand />
+              <p className="footer-copy">
+                Credit applications with clear costs, secure identity checks and human review.
               </p>
             </div>
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="footer-links">
+              <strong>Company</strong>
               <Link href="/about">About</Link>
               <Link href="/faq">Frequently asked questions</Link>
               <Link href="/contact">Contact support</Link>
             </div>
-            <div className="flex flex-col gap-2 text-sm">
+            <div className="footer-links">
+              <strong>Legal</strong>
               <Link href="/terms">Terms</Link>
               <Link href="/privacy">Privacy</Link>
-              <span>© {new Date().getFullYear()} PataPesa</span>
             </div>
+          </div>
+          <div className="footer-bottom">
+            <span>© {new Date().getFullYear()} PataPesa</span>
+            <span>All applications are subject to assessment and approval.</span>
           </div>
         </footer>
       </div>

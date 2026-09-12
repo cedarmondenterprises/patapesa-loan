@@ -22,16 +22,16 @@ const Button: React.FC<ButtonProps> = ({
   className = '',
 }) => {
   const baseClasses =
-    'font-semibold rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
+    'font-semibold rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
 
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 disabled:bg-blue-300',
+    primary: 'bg-pata-900 text-white hover:bg-pata-950 focus:ring-pata-600 disabled:bg-slate-400',
     secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500 disabled:bg-gray-300',
     success:
       'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-300',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:bg-red-300',
     outline:
-      'bg-transparent border-2 border-blue-600 text-blue-600 hover:bg-blue-50 focus:ring-blue-500 disabled:border-blue-300 disabled:text-blue-300',
+      'bg-transparent border border-pata-900 text-pata-900 hover:bg-pata-50 focus:ring-pata-600 disabled:border-slate-300 disabled:text-slate-400',
   };
 
   const sizeClasses = {

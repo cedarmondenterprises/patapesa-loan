@@ -1,10 +1,13 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/router';
+import Brand from '../components/Brand';
 import { api } from '../lib/api';
+
 export default function Login() {
   const router = useRouter(),
     [error, setError] = useState(''),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [show, setShow] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -29,22 +32,56 @@ export default function Login() {
     }
   }
   return (
-    <main className="login">
-      <form className="login-card" onSubmit={submit}>
-        <div className="brand-mark">P</div>
-        <h1>PataPesa Administration</h1>
-        <p>Restricted to authorised staff. Privileged changes are audited.</p>
-        {error && <div className="error">{error}</div>}
-        <label>
-          Email
-          <input name="email" type="email" autoComplete="email" required />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" autoComplete="current-password" required />
-        </label>
-        <button disabled={busy}>{busy ? 'Checking access…' : 'Secure sign in'}</button>
-      </form>
+    <main className="admin-login">
+      <section className="login-identity">
+        <Brand />
+        <div>
+          <p className="overline">Internal operations</p>
+          <h1>Decisions backed by a clear record.</h1>
+          <p>
+            Review customers, identity checks and lending activity from one controlled workspace.
+          </p>
+        </div>
+        <small>Authorised PataPesa personnel only</small>
+      </section>
+      <section className="login-form-wrap">
+        <form className="login-card" onSubmit={submit}>
+          <p className="overline">Staff access</p>
+          <h2>Sign in to operations</h2>
+          <p className="muted">
+            Use your assigned staff account. Customer accounts cannot access this portal.
+          </p>
+          {error && (
+            <div className="alert error" role="alert">
+              {error}
+            </div>
+          )}
+          <label>
+            <span>Email address</span>
+            <input name="email" type="email" autoComplete="email" required />
+          </label>
+          <label>
+            <span>Password</span>
+            <div className="password-field">
+              <input
+                name="password"
+                type={show ? 'text' : 'password'}
+                autoComplete="current-password"
+                required
+              />
+              <button type="button" onClick={() => setShow(!show)}>
+                {show ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </label>
+          <button className="primary wide" disabled={busy}>
+            {busy ? 'Verifying access…' : 'Sign in securely'}
+          </button>
+          <p className="security-note">
+            <span>●</span> Privileged changes are written to the audit log.
+          </p>
+        </form>
+      </section>
     </main>
   );
 }

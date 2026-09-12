@@ -24,31 +24,23 @@ export default function Forgot() {
   }
   return (
     <Layout title="Account recovery | PataPesa">
-      <div className="mx-auto max-w-lg rounded-2xl border bg-white p-8">
-        <h1 className="text-3xl font-black">Account recovery</h1>
+      <div className="surface mx-auto max-w-lg border-t-4 border-t-pata-900 p-8 shadow-quiet">
+        <p className="eyebrow">Secure access</p>
+        <h1 className="mt-3 text-3xl font-bold text-pata-950">Account recovery</h1>
         <p className="mt-4 text-slate-600">
           Enter the email registered to your account. Reset links expire after 30 minutes.
         </p>
         {message && (
-          <p role="status" className="mt-5 rounded-lg bg-emerald-50 p-4">
+          <p role="status" className="notice notice-success mt-5">
             {message}
           </p>
         )}
         <form onSubmit={submit} className="mt-6 space-y-4">
-          <label className="block text-sm font-bold">
-            Email
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              className="mt-2 w-full rounded-lg border p-3"
-            />
+          <label className="field">
+            <span>Email address</span>
+            <input name="email" type="email" required autoComplete="email" />
           </label>
-          <button
-            disabled={loading}
-            className="w-full rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60"
-          >
+          <button disabled={loading} className="button button-primary w-full disabled:opacity-60">
             {loading ? 'Sending…' : 'Send reset link'}
           </button>
         </form>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f7f4ec"/>
+  <rect x="72" y="66" width="1056" height="498" rx="26" fill="#123c32"/>
+  <circle cx="1025" cy="100" r="250" fill="#1d5144"/>
+  <circle cx="1100" cy="580" r="300" fill="#0b2d26"/>
+  <rect x="140" y="144" width="82" height="82" rx="19" fill="#fffdf7"/>
+  <path d="M163 205v-40h21c12 0 19 6 19 16 0 11-7 17-19 17h-8v7h-13Zm13-18h7c5 0 7-2 7-6s-2-6-7-6h-7v12Z" fill="#123c32"/>
+  <text x="245" y="202" font-family="Arial,sans-serif" font-size="64" font-weight="700" fill="#fffdf7">PataPesa</text>
+  <text x="140" y="330" font-family="Arial,sans-serif" font-size="58" font-weight="700" fill="#fffdf7">Credit, explained clearly.</text>
+  <text x="140" y="397" font-family="Arial,sans-serif" font-size="28" fill="#c9d8d3">Compare costs. Apply securely. Follow every step.</text>
+  <text x="140" y="490" font-family="Arial,sans-serif" font-size="23" font-weight="700" fill="#d7a16f">BUILT FOR KENYA</text>
+</svg>
