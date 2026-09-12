@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     nationality VARCHAR(3),
     gender VARCHAR(10),
     profile_picture_url TEXT,
-    status VARCHAR(50) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'SUSPENDED', 'DELETED')),
+    status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED')),
     is_email_verified BOOLEAN DEFAULT false,
     is_phone_verified BOOLEAN DEFAULT false,
     email_verified_at TIMESTAMP,
@@ -33,6 +33,9 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ALTER COLUMN status SET DEFAULT 'PENDING';
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;
+ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('PENDING','ACTIVE','INACTIVE','SUSPENDED','REJECTED','DELETED'));
 
 CREATE TABLE IF NOT EXISTS support_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -219,6 +222,7 @@ CREATE TABLE IF NOT EXISTS loans (
     loan_number VARCHAR(50) NOT NULL UNIQUE,
     principal_amount DECIMAL(12, 2) NOT NULL,
     total_interest DECIMAL(12, 2) NOT NULL,
+    processing_fee DECIMAL(12, 2) NOT NULL DEFAULT 0,
     total_amount_payable DECIMAL(12, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'KES',
     interest_rate DECIMAL(5, 2) NOT NULL,
@@ -235,6 +239,7 @@ CREATE TABLE IF NOT EXISTS loans (
 CREATE INDEX IF NOT EXISTS idx_loans_user_id ON loans(user_id);
 CREATE INDEX IF NOT EXISTS idx_loans_status ON loans(status);
 CREATE INDEX IF NOT EXISTS idx_loans_loan_number ON loans(loan_number);
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS processing_fee DECIMAL(12, 2) NOT NULL DEFAULT 0;
 
 -- Repayment schedules
 CREATE TABLE IF NOT EXISTS repayment_schedules (
@@ -244,6 +249,7 @@ CREATE TABLE IF NOT EXISTS repayment_schedules (
     due_date DATE NOT NULL,
     principal_amount DECIMAL(12, 2) NOT NULL,
     interest_amount DECIMAL(12, 2) NOT NULL,
+    fee_amount DECIMAL(12, 2) NOT NULL DEFAULT 0,
     total_due DECIMAL(12, 2) NOT NULL,
     amount_paid DECIMAL(12, 2) DEFAULT 0,
     late_fee DECIMAL(12, 2) DEFAULT 0,
@@ -256,6 +262,7 @@ CREATE TABLE IF NOT EXISTS repayment_schedules (
 CREATE INDEX IF NOT EXISTS idx_repayment_schedules_loan_id ON repayment_schedules(loan_id);
 CREATE INDEX IF NOT EXISTS idx_repayment_schedules_status ON repayment_schedules(status);
 CREATE INDEX IF NOT EXISTS idx_repayment_schedules_due_date ON repayment_schedules(due_date);
+ALTER TABLE repayment_schedules ADD COLUMN IF NOT EXISTS fee_amount DECIMAL(12, 2) NOT NULL DEFAULT 0;
 
 -- Payments
 CREATE TABLE IF NOT EXISTS payments (
@@ -456,9 +463,17 @@ CREATE TABLE IF NOT EXISTS user_roles (
 
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 
-INSERT INTO admin_roles(name,description,permissions,status)
-VALUES ('PLATFORM_ADMIN','May review identity submissions and loan applications','["kyc:review","loans:review"]'::jsonb,'ACTIVE')
+INSERT INTO admin_roles(name,description,permissions,status) VALUES
+('SUPER_ADMIN','Full platform administration','["dashboard:view","users:view","users:manage","roles:assign","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","audit:view"]'::jsonb,'ACTIVE'),
+('MANAGER','Operational and financial management','["dashboard:view","users:view","users:manage","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","audit:view"]'::jsonb,'ACTIVE'),
+('STAFF','Customer registration, identity, loan and support operations','["dashboard:view","users:view","users:manage","kyc:review","loans:review","ledger:view","support:manage"]'::jsonb,'ACTIVE')
 ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,permissions=EXCLUDED.permissions,status='ACTIVE',updated_at=NOW();
+
+INSERT INTO user_roles(user_id,role_id)
+SELECT ur.user_id,new_role.id FROM user_roles ur JOIN admin_roles old_role ON old_role.id=ur.role_id
+CROSS JOIN admin_roles new_role WHERE old_role.name='PLATFORM_ADMIN' AND new_role.name='SUPER_ADMIN'
+ON CONFLICT(user_id,role_id) DO NOTHING;
+UPDATE admin_roles SET status='INACTIVE' WHERE name='PLATFORM_ADMIN';
 
 INSERT INTO loan_products(product_code,name,description,min_amount,max_amount,min_term,max_term,interest_rate,processing_fee,late_payment_fee,currency)
 VALUES

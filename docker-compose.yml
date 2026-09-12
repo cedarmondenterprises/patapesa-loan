@@ -37,7 +37,7 @@ services:
       SESSION_MAX_AGE_HOURS: ${SESSION_MAX_AGE_HOURS:-168}
       KYC_ENCRYPTION_KEY: ${KYC_ENCRYPTION_KEY:?Set KYC_ENCRYPTION_KEY in .env}
       PUBLIC_APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
-      CORS_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
+      CORS_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env},https://${ADMIN_DOMAIN:?Set ADMIN_DOMAIN in .env}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_SECURE: ${SMTP_SECURE:-false}
@@ -83,10 +83,33 @@ services:
     security_opt: [no-new-privileges:true]
     logging: *logging
 
+  admin:
+    build: ./admin
+    environment:
+      BACKEND_URL: http://backend:5000
+      ADMIN_APP_URL: https://${ADMIN_DOMAIN:?Set ADMIN_DOMAIN in .env}
+    expose: ["3001"]
+    networks: [edge, app]
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp, "/app/.next/cache:uid=1000,gid=1000"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
   caddy:
     image: caddy:2.10-alpine
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN in .env}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -95,6 +118,7 @@ services:
     networks: [edge]
     depends_on:
       frontend: { condition: service_healthy }
+      admin: { condition: service_healthy }
     restart: unless-stopped
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]

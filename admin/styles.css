@@ -1,0 +1,214 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #172033;
+  background: #f4f7fb;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+.login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #081b17, #123b31);
+  padding: 20px;
+}
+.login-card {
+  width: min(430px, 100%);
+  background: white;
+  padding: 38px;
+  border-radius: 20px;
+  box-shadow: 0 25px 70px #0005;
+}
+.brand-mark {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #047857;
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  font-weight: 900;
+}
+.login h1 {
+  margin: 20px 0 8px;
+}
+.login p {
+  color: #64748b;
+}
+.login label {
+  display: block;
+  font-weight: 700;
+  margin-top: 20px;
+}
+.login input {
+  display: block;
+  width: 100%;
+  padding: 13px;
+  margin-top: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+}
+.login button,
+.primary {
+  width: 100%;
+  margin-top: 24px;
+  padding: 13px;
+  border: 0;
+  border-radius: 9px;
+  background: #047857;
+  color: white;
+  font-weight: 800;
+}
+.error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 18px;
+}
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 245px 1fr;
+}
+.sidebar {
+  background: #0b1f1a;
+  color: #d8e7e2;
+  padding: 26px 18px;
+}
+.sidebar h2 {
+  color: white;
+  margin: 0 0 28px;
+}
+.sidebar button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  margin: 4px 0;
+}
+.sidebar button.active {
+  background: #ffffff1c;
+  color: white;
+}
+.content {
+  padding: 32px;
+  overflow: auto;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin: 24px 0;
+}
+.card,
+.panel {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+}
+.card span {
+  color: #64748b;
+  font-size: 13px;
+}
+.card strong {
+  display: block;
+  font-size: 25px;
+  margin-top: 9px;
+}
+.panel {
+  margin-top: 20px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+th,
+td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+.actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.actions button,
+.small {
+  border: 1px solid #cbd5e1;
+  background: white;
+  padding: 7px 10px;
+  border-radius: 7px;
+}
+.actions .approve {
+  background: #047857;
+  color: white;
+  border: 0;
+}
+.badge {
+  padding: 4px 8px;
+  border-radius: 20px;
+  background: #e2e8f0;
+  font-size: 11px;
+  font-weight: 800;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+.toolbar input,
+.toolbar select {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+.money {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+@media (max-width: 800px) {
+  .shell {
+    display: block;
+  }
+  .sidebar {
+    position: static;
+  }
+  .content {
+    padding: 18px;
+  }
+  .sidebar button {
+    display: inline-block;
+    width: auto;
+  }
+  table {
+    min-width: 850px;
+  }
+  .panel {
+    overflow: auto;
+  }
+}

@@ -9,6 +9,7 @@ import { query, transaction } from './db';
 import { sendPasswordReset } from './email';
 import { calculateLoan } from './loan-calculator';
 import { requirePermission } from './permissions';
+import adminRoutes from './admin-routes';
 import {
   blindIndex,
   decryptSensitive,
@@ -103,15 +104,11 @@ router.post(
           [email, phone, hash, firstName, lastName],
         )
       )[0];
-      setAuthCookie(
-        res,
-        createToken({ id: user.id, email: user.email, authVersion: user.auth_version }),
-        req.body.remember !== false,
-      );
       await audit(req, 'ACCOUNT_REGISTERED', 'user', user.id, user.id);
       return res.status(201).json({
         success: true,
-        message: 'Account created',
+        message:
+          'Registration received. An administrator must approve your account before you can sign in.',
         data: {
           user: {
             id: user.id,
@@ -472,7 +469,7 @@ router.get(
     la.loan_term AS term,la.purpose,la.status,la.created_at AS "createdAt",lp.name AS product,
     u.first_name AS "firstName",u.last_name AS "lastName",u.email
     FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id JOIN users u ON u.id=la.user_id
-    WHERE la.status IN ('SUBMITTED','UNDER_REVIEW') ORDER BY la.created_at ASC LIMIT 200`);
+    WHERE la.status IN ('SUBMITTED','UNDER_REVIEW','APPROVED') ORDER BY la.created_at ASC LIMIT 200`);
       return res.json({ success: true, data: rows });
     } catch (error) {
       return next(error);
@@ -493,6 +490,19 @@ router.patch(
       if (errors.length) return res.status(400).json({ success: false, message: errors[0] });
       if (req.body.status === 'REJECTED' && !req.body.reason)
         return res.status(400).json({ success: false, message: 'A rejection reason is required' });
+      if (req.body.status === 'APPROVED') {
+        const eligible = await query(
+          `SELECT 1 FROM loan_applications la JOIN users u ON u.id=la.user_id
+           JOIN kyc_verifications k ON k.user_id=la.user_id AND k.verification_status='APPROVED'
+           WHERE la.id=$1 AND u.status='ACTIVE'`,
+          [req.params.id],
+        );
+        if (!eligible.length)
+          return res.status(409).json({
+            success: false,
+            message: 'The customer must be active with approved KYC before loan approval',
+          });
+      }
       const row = (
         await query(
           `UPDATE loan_applications SET status=$1,rejection_reason=$2,reviewed_by=$3,reviewed_at=NOW(),
@@ -617,5 +627,9 @@ router.post(
     }
   },
 );
+
+// Keep the consolidated admin router after the legacy review endpoints so a
+// matching request is authenticated exactly once.
+router.use('/admin', adminRoutes);
 
 export default router;

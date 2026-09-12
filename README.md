@@ -5,7 +5,8 @@ PataPesa is a full-stack Kenyan loan-application portal. Customers can register,
 ## Architecture
 
 - Caddy terminates HTTPS and is the only public application service.
-- Next.js serves the frontend and proxies same-origin `/api` requests internally.
+- Separate Next.js services serve the customer portal and staff-only admin portal;
+  each proxies same-origin `/api` requests internally.
 - Express provides the API and issues signed sessions in Secure, HttpOnly cookies.
 - PostgreSQL stores application data on a private Docker network.
 - The API converges the idempotent schema on startup under a PostgreSQL advisory lock.
@@ -14,7 +15,7 @@ The database and API have no public host ports. This avoids the former browser b
 
 ## Azure VM deployment
 
-Prerequisites: an Ubuntu Azure VM, Docker Engine with the Compose plugin, a domain whose A record points to the VM, and inbound NSG rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP.
+Prerequisites: an Ubuntu Azure VM, Docker Engine with the Compose plugin, customer and admin hostnames whose A records point to the VM, and inbound NSG rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP. The examples use `loans.example.com` and `admin.loans.example.com`.
 
 ```bash
 git clone https://github.com/cedarmondenterprises/patapesa-loan.git
@@ -26,7 +27,7 @@ openssl rand -hex 48   # generate a separate KYC_ENCRYPTION_KEY
 chmod 600 .env
 ```
 
-Edit `.env`, set the domain and generated secrets, then configure SMTP. Password recovery requires working SMTP settings.
+Edit `.env`, set `DOMAIN` and `ADMIN_DOMAIN`, add the generated secrets, then configure SMTP. Password recovery requires working SMTP settings. Both DNS records must resolve to the VM before starting Caddy.
 
 ```bash
 docker compose config
@@ -34,19 +35,31 @@ docker compose build --pull
 docker compose up -d
 docker compose ps
 curl -fsS https://YOUR_DOMAIN/api/health
+curl -fsS https://YOUR_ADMIN_DOMAIN/api/health
 ```
 
 Caddy obtains and renews the TLS certificate automatically after DNS and ports are correct.
+If your VM user is not a member of the Docker group, prefix every `docker compose` command with `sudo`.
 
 ## First staff account
 
-Create the staff member through the normal registration page, then grant the built-in platform administrator role from the VM:
+Register the first account through the customer site, then grant it the `SUPER_ADMIN` role from the VM. Granting the role also activates a pending account:
 
 ```bash
-docker compose exec backend npm run admin:grant -- staff@example.com
+sudo docker compose exec backend npm run admin:grant -- staff@example.com
 ```
 
-That user can sign in normally and open `https://YOUR_DOMAIN/admin` to review pending identity submissions and loan applications. Do not share staff accounts.
+That user signs in only at `https://YOUR_ADMIN_DOMAIN`. The customer site has no admin route. Do not share staff accounts.
+
+New registrations stay pending and cannot sign in until staff approve them. The three staff roles are:
+
+| Role | Access |
+| --- | --- |
+| Super Admin | All admin features, including assigning or removing staff roles |
+| Manager | Dashboard, users, registrations, KYC, loans, ledger, support, and audit |
+| Staff | Day-to-day registration, KYC, loan, ledger, and support workflows |
+
+The admin portal includes live registration and user queues, account activation/suspension, role assignment, KYC review, loan review and disbursement confirmation, portfolio totals, a drill-down loan ledger with CSV export, support management, and audit history. It does not initiate bank or mobile-money transfers or manually create repayments; connect an approved payment provider before handling real funds.
 
 ## Updating safely
 
@@ -84,6 +97,16 @@ BACKEND_URL=http://localhost:5000 npm run dev
 
 Open `http://localhost:3000`. The browser uses `/api`; the Next.js server forwards those calls to the API.
 
+Run the admin portal separately:
+
+```bash
+cd admin
+npm ci
+BACKEND_URL=http://localhost:5000 npm run dev
+```
+
+Open `http://localhost:3001` for staff access.
+
 ## API surface
 
 - `GET /api/health` and `GET /api/health/live`
@@ -95,6 +118,10 @@ Open `http://localhost:3000`. The browser uses `/api`; the Next.js server forwar
 - `GET|POST /api/kyc`
 - `GET /api/payments`
 - `POST /api/contact`
+- `GET /api/admin/me`, `/dashboard`, `/users`, `/roles`, `/ledger`, `/support`, `/audit`
+- `PATCH /api/admin/users/:id/status`, `/support/:id`
+- `PUT /api/admin/users/:id/role`
+- `POST /api/admin/applications/:id/disburse`
 - `GET|PATCH /api/admin/applications` (staff permission required)
 - `GET|PATCH /api/admin/kyc` (staff permission required)
 
@@ -103,6 +130,7 @@ Open `http://localhost:3000`. The browser uses `/api`; the Next.js server forwar
 ```bash
 cd backend && npm ci && npm run build && npm test && npm run lint && npm audit --omit=dev
 cd ../frontend && npm ci && npm run type-check && npm run lint && npm run build && npm audit --omit=dev
+cd ../admin && npm ci && npm run type-check && npm run lint && npm run build && npm audit --omit=dev
 ```
 
 Technical hardening does not replace lending authorization, customer disclosures, underwriting, complaints handling, data-protection impact assessment, retention rules, payment-provider approval, monitoring, backups, or an internal staff workflow. Complete those operational and legal controls before accepting real customers or money.
