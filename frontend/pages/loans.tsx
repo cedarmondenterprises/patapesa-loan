@@ -1,6 +1,159 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
-import { api, token } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
-type Product={id:string;name:string;description:string;minAmount:string;maxAmount:string;minTerm:number;maxTerm:number;interestRate:string;processingFee:string;currency:string};
-export default function Loans(){const [products,setProducts]=useState<Product[]>([]);const [selected,setSelected]=useState<Product|null>(null);const [message,setMessage]=useState('');useEffect(()=>{api<{data:Product[]}>('/products').then(r=>setProducts(r.data)).catch(e=>setMessage(e.message))},[]);async function apply(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!token()){location.href='/login';return}const f=new FormData(e.currentTarget);try{const r=await api<{message:string;data:{applicationNumber:string}}>('/loans/applications',{method:'POST',body:JSON.stringify({productId:selected?.id,amount:Number(f.get('amount')),term:Number(f.get('term')),purpose:f.get('purpose')})});setMessage(`${r.message}. Reference: ${r.data.applicationNumber}`);setSelected(null)}catch(error){setMessage(error instanceof Error?error.message:'Application failed')}}return <Layout title="Loan products | PataPesa"><h1 className="text-4xl font-black">Loan products</h1><p className="mt-3 max-w-2xl text-slate-600">Compare limits and annual rates. Final approval depends on identity, affordability and credit checks.</p>{message&&<p className="mt-6 rounded-lg bg-emerald-50 p-4 text-emerald-900">{message}</p>}<div className="mt-8 grid gap-5 md:grid-cols-3">{products.map(p=><article className="rounded-2xl border bg-white p-6" key={p.id}><h2 className="text-xl font-bold">{p.name}</h2><p className="mt-2 text-sm text-slate-500">{p.description}</p><dl className="mt-5 space-y-2 text-sm"><div className="flex justify-between"><dt>Amount</dt><dd className="font-bold">KES {Number(p.minAmount).toLocaleString()}–{Number(p.maxAmount).toLocaleString()}</dd></div><div className="flex justify-between"><dt>Term</dt><dd className="font-bold">{p.minTerm}–{p.maxTerm} months</dd></div><div className="flex justify-between"><dt>Interest</dt><dd className="font-bold">{p.interestRate}% p.a.</dd></div><div className="flex justify-between"><dt>Processing fee</dt><dd className="font-bold">{p.processingFee||0}%</dd></div></dl><button onClick={()=>setSelected(p)} className="mt-6 w-full rounded-lg bg-emerald-700 p-3 font-bold text-white">Apply</button></article>)}</div>{selected&&<div className="fixed inset-0 z-30 grid place-items-center bg-black/60 p-4"><form onSubmit={apply} className="w-full max-w-md rounded-2xl bg-white p-7"><h2 className="text-2xl font-black">Apply for {selected.name}</h2><label className="mt-5 block text-sm font-bold">Amount (KES)<input name="amount" type="number" min={selected.minAmount} max={selected.maxAmount} required className="mt-2 w-full rounded-lg border p-3"/></label><label className="mt-4 block text-sm font-bold">Term (months)<input name="term" type="number" min={selected.minTerm} max={selected.maxTerm} required className="mt-2 w-full rounded-lg border p-3"/></label><label className="mt-4 block text-sm font-bold">Purpose<textarea name="purpose" minLength={5} maxLength={255} required className="mt-2 w-full rounded-lg border p-3"/></label><div className="mt-5 flex gap-3"><button type="button" onClick={()=>setSelected(null)} className="flex-1 rounded-lg border p-3 font-bold">Cancel</button><button className="flex-1 rounded-lg bg-emerald-700 p-3 font-bold text-white">Submit</button></div></form></div>}</Layout>}
+type Product = {
+  id: string;
+  name: string;
+  description: string;
+  minAmount: string;
+  maxAmount: string;
+  minTerm: number;
+  maxTerm: number;
+  interestRate: string;
+  processingFee: string;
+  currency: string;
+};
+
+export default function Loans() {
+  const router = useRouter();
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    api<{ data: Product[] }>('/products')
+      .then((r) => setProducts(r.data))
+      .catch((e) => setMessage(e.message));
+  }, []);
+  async function apply(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    setLoading(true);
+    try {
+      const r = await api<{ message: string; data: { applicationNumber: string } }>(
+        '/loans/applications',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            productId: selected?.id,
+            amount: Number(f.get('amount')),
+            term: Number(f.get('term')),
+            purpose: f.get('purpose'),
+          }),
+        },
+      );
+      setMessage(`${r.message}. Reference: ${r.data.applicationNumber}`);
+      setSelected(null);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await router.push('/login');
+        return;
+      }
+      setMessage(error instanceof Error ? error.message : 'Application failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <Layout title="Loan products | PataPesa">
+      <h1 className="text-4xl font-black">Loan products</h1>
+      <p className="mt-3 max-w-2xl text-slate-600">
+        Compare limits and annual rates. Final approval depends on identity, affordability and
+        credit checks.
+      </p>
+      {message && <p className="mt-6 rounded-lg bg-emerald-50 p-4 text-emerald-900">{message}</p>}
+      <div className="mt-8 grid gap-5 md:grid-cols-3">
+        {products.map((p) => (
+          <article className="rounded-2xl border bg-white p-6" key={p.id}>
+            <h2 className="text-xl font-bold">{p.name}</h2>
+            <p className="mt-2 text-sm text-slate-500">{p.description}</p>
+            <dl className="mt-5 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt>Amount</dt>
+                <dd className="font-bold">
+                  KES {Number(p.minAmount).toLocaleString()}–{Number(p.maxAmount).toLocaleString()}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Term</dt>
+                <dd className="font-bold">
+                  {p.minTerm}–{p.maxTerm} months
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Interest</dt>
+                <dd className="font-bold">{p.interestRate}% p.a.</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Processing fee</dt>
+                <dd className="font-bold">{p.processingFee || 0}%</dd>
+              </div>
+            </dl>
+            <button
+              onClick={() => setSelected(p)}
+              className="mt-6 w-full rounded-lg bg-emerald-700 p-3 font-bold text-white"
+            >
+              Apply
+            </button>
+          </article>
+        ))}
+      </div>
+      {selected && (
+        <div className="fixed inset-0 z-30 grid place-items-center bg-black/60 p-4">
+          <form onSubmit={apply} className="w-full max-w-md rounded-2xl bg-white p-7">
+            <h2 className="text-2xl font-black">Apply for {selected.name}</h2>
+            <label className="mt-5 block text-sm font-bold">
+              Amount (KES)
+              <input
+                name="amount"
+                type="number"
+                min={selected.minAmount}
+                max={selected.maxAmount}
+                required
+                className="mt-2 w-full rounded-lg border p-3"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-bold">
+              Term (months)
+              <input
+                name="term"
+                type="number"
+                min={selected.minTerm}
+                max={selected.maxTerm}
+                required
+                className="mt-2 w-full rounded-lg border p-3"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-bold">
+              Purpose
+              <textarea
+                name="purpose"
+                minLength={5}
+                maxLength={255}
+                required
+                className="mt-2 w-full rounded-lg border p-3"
+              />
+            </label>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="flex-1 rounded-lg border p-3 font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={loading}
+                className="flex-1 rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60"
+              >
+                {loading ? 'Submitting…' : 'Submit'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </Layout>
+  );
+}

@@ -1,121 +1,114 @@
-version: '3.8'
-
 services:
-  # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: patapesa-postgres
     environment:
       POSTGRES_USER: ${DB_USER:-patapesa}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-patapesa_dev_password}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       POSTGRES_DB: ${DB_NAME:-patapesa_db}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
-    ports:
-      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
-    networks:
-      - patapesa-network
+    networks: [data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-patapesa}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: patapesa-redis
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-redis_dev_password}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
-    volumes:
-      - redis_data:/data
-    networks:
-      - patapesa-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Backend API Service (Node.js/Express)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: patapesa-backend
+    build: ./backend
     environment:
-      # Database Configuration
-      DATABASE_URL: postgresql://${DB_USER:-patapesa}:${DB_PASSWORD:-patapesa_dev_password}@postgres:5432/${DB_NAME:-patapesa_db}
+      NODE_ENV: production
+      APP_PORT: 5000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-patapesa}
-      DB_PASSWORD: ${DB_PASSWORD:-patapesa_dev_password}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       DB_NAME: ${DB_NAME:-patapesa_db}
-      
-      # Redis Configuration
-      REDIS_URL: redis://default:${REDIS_PASSWORD:-redis_dev_password}@redis:6379/0
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
-      
-      # Application Configuration
-      NODE_ENV: ${NODE_ENV:-development}
-      APP_PORT: 5000
-      API_BASE_URL: /api/v1
-      API_VERSION: 1.0.0
-      
-      # JWT Configuration
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
-      JWT_EXPIRY: 24h
-      
-      # CORS Configuration
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000,http://localhost:8080}
-      
-      # Security Configuration
-      HELMET_ENABLED: "true"
-      RATE_LIMIT_ENABLED: "true"
-      API_RATE_LIMIT_WINDOW: 15
-      API_RATE_LIMIT_MAX_REQUESTS: 100
-    ports:
-      - "${API_PORT:-5000}:5000"
-    networks:
-      - patapesa-network
+      DB_SSL: "false"
+      AUTO_MIGRATE: "true"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
+      SESSION_MAX_AGE_HOURS: ${SESSION_MAX_AGE_HOURS:-168}
+      KYC_ENCRYPTION_KEY: ${KYC_ENCRYPTION_KEY:?Set KYC_ENCRYPTION_KEY in .env}
+      PUBLIC_APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      CORS_ORIGIN: https://${DOMAIN:?Set DOMAIN in .env}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+    expose: ["5000"]
+    networks: [app, data]
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
 
-  # Frontend Service (Next.js/React)
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: patapesa-frontend
+    build: ./frontend
     environment:
-      # Frontend Environment Variables
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api}
-      NODE_ENV: ${NODE_ENV:-development}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    networks:
-      - patapesa-network
+      BACKEND_URL: http://backend:5000
+      PUBLIC_APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+    expose: ["3000"]
+    networks: [edge, app]
     depends_on:
-      - backend
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp, "/app/.next/cache:uid=1000,gid=1000"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+
+  caddy:
+    image: caddy:2.10-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      frontend: { condition: service_healthy }
+    restart: unless-stopped
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
 
 networks:
-  patapesa-network:
-    driver: bridge
+  edge:
+  app:
+    internal: true
+  data:
+    internal: true
 
 volumes:
   postgres_data:
-    driver: local
-  redis_data:
-    driver: local
+  caddy_data:
+  caddy_config:

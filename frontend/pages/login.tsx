@@ -2,6 +2,86 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
-import { api, saveSession } from '../lib/api';
+import { api } from '../lib/api';
 
-export default function Login(){const router=useRouter();const [message,setMessage]=useState('');const [loading,setLoading]=useState(false);async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setLoading(true);setMessage('');const form=new FormData(e.currentTarget);try{const result=await api<{data:{token:string}}>('/auth/login',{method:'POST',body:JSON.stringify({email:form.get('email'),password:form.get('password')})});saveSession(result.data.token,form.get('remember')==='on');router.push('/dashboard');}catch(error){setMessage(error instanceof Error?error.message:'Login failed');}finally{setLoading(false)}}return <Layout title="Login | PataPesa"><div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm"><h1 className="text-3xl font-black">Welcome back</h1><p className="mt-2 text-slate-500">Access your application securely.</p>{message&&<p className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">{message}</p>}<form className="mt-7 space-y-5" onSubmit={submit}><label className="block text-sm font-bold">Email<input name="email" type="email" required autoComplete="email" className="mt-2 w-full rounded-lg border p-3"/></label><label className="block text-sm font-bold">Password<input name="password" type="password" required autoComplete="current-password" className="mt-2 w-full rounded-lg border p-3"/></label><label className="flex gap-2 text-sm"><input name="remember" type="checkbox" defaultChecked/> Keep me signed in on this device</label><button disabled={loading} className="w-full rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60">{loading?'Signing in…':'Sign in'}</button></form><p className="mt-5 text-sm">No account? <Link className="font-bold text-emerald-700" href="/register">Create one</Link></p></div></Layout>}
+export default function Login() {
+  const router = useRouter();
+  const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    const form = new FormData(e.currentTarget);
+    try {
+      await api('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: form.get('email'),
+          password: form.get('password'),
+          remember: form.get('remember') === 'on',
+        }),
+      });
+      await router.push('/dashboard');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+  return (
+    <Layout title="Login | PataPesa">
+      <div className="mx-auto max-w-md rounded-2xl border bg-white p-8 shadow-sm">
+        <h1 className="text-3xl font-black">Welcome back</h1>
+        <p className="mt-2 text-slate-500">Access your application securely.</p>
+        {message && (
+          <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            {message}
+          </p>
+        )}
+        <form className="mt-7 space-y-5" onSubmit={submit}>
+          <label className="block text-sm font-bold">
+            Email
+            <input
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              className="mt-2 w-full rounded-lg border p-3"
+            />
+          </label>
+          <label className="block text-sm font-bold">
+            Password
+            <input
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              className="mt-2 w-full rounded-lg border p-3"
+            />
+          </label>
+          <div className="flex items-center justify-between">
+            <label className="flex gap-2 text-sm">
+              <input name="remember" type="checkbox" defaultChecked /> Keep me signed in
+            </label>
+            <Link href="/forgot-password" className="text-sm font-bold text-emerald-700">
+              Forgot password?
+            </Link>
+          </div>
+          <button
+            disabled={loading}
+            className="w-full rounded-lg bg-emerald-700 p-3 font-bold text-white disabled:opacity-60"
+          >
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </form>
+        <p className="mt-5 text-sm">
+          No account?{' '}
+          <Link className="font-bold text-emerald-700" href="/register">
+            Create one
+          </Link>
+        </p>
+      </div>
+    </Layout>
+  );
+}

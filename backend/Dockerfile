@@ -1,23 +1,18 @@
-# Use Node.js 18 Alpine as base image
-FROM node:20-alpine
-
-# Set working directory
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Copy package.json and package-lock.json
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
-
-# Copy source code
-COPY . .
-
-# Build TypeScript
+COPY tsconfig.json schema.sql ./
+COPY src ./src
 RUN npm run build
 
-# Expose API port
+FROM node:22-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/schema.sql ./schema.sql
+USER node
 EXPOSE 5000
-
-# Start the application
-CMD ["npm", "start"]
+CMD ["node", "dist/index.js"]

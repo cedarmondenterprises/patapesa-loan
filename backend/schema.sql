@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     email_verified_at TIMESTAMP,
     phone_verified_at TIMESTAMP,
     last_login TIMESTAMP,
+    auth_version INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP
@@ -30,6 +31,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS support_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -89,12 +92,27 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_user_id ON verification_codes(
 CREATE INDEX IF NOT EXISTS idx_verification_codes_type ON verification_codes(type);
 CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_codes(expires_at);
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_digest CHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expiry ON password_reset_tokens(expires_at) WHERE used_at IS NULL;
+
 -- KYC (Know Your Customer) table
 CREATE TABLE IF NOT EXISTS kyc_verifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     id_type VARCHAR(50) NOT NULL CHECK (id_type IN ('NATIONAL_ID', 'PASSPORT', 'DRIVING_LICENSE', 'VOTER_ID')),
-    id_number VARCHAR(50) NOT NULL,
+    id_number VARCHAR(50),
+    id_number_ciphertext TEXT,
+    id_number_hash CHAR(64),
+    id_number_last4 VARCHAR(4),
     id_document_url TEXT,
     id_expiry_date DATE,
     verification_status VARCHAR(50) DEFAULT 'PENDING' CHECK (verification_status IN ('PENDING', 'APPROVED', 'REJECTED', 'EXPIRED')),
@@ -107,6 +125,12 @@ CREATE TABLE IF NOT EXISTS kyc_verifications (
 
 CREATE INDEX IF NOT EXISTS idx_kyc_user_id ON kyc_verifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_kyc_status ON kyc_verifications(verification_status);
+
+ALTER TABLE kyc_verifications ALTER COLUMN id_number DROP NOT NULL;
+ALTER TABLE kyc_verifications ADD COLUMN IF NOT EXISTS id_number_ciphertext TEXT;
+ALTER TABLE kyc_verifications ADD COLUMN IF NOT EXISTS id_number_hash CHAR(64);
+ALTER TABLE kyc_verifications ADD COLUMN IF NOT EXISTS id_number_last4 VARCHAR(4);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_kyc_id_number_hash ON kyc_verifications(id_number_hash) WHERE id_number_hash IS NOT NULL;
 
 -- KYC Documents
 CREATE TABLE IF NOT EXISTS kyc_documents (
@@ -148,6 +172,13 @@ CREATE TABLE IF NOT EXISTS loan_products (
 
 CREATE INDEX IF NOT EXISTS idx_loan_products_status ON loan_products(status);
 
+DO $$ BEGIN
+  ALTER TABLE loan_products ADD CONSTRAINT loan_product_amounts_valid CHECK (min_amount > 0 AND max_amount >= min_amount);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE loan_products ADD CONSTRAINT loan_product_terms_valid CHECK (min_term > 0 AND max_term >= min_term);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- Loan applications
 CREATE TABLE IF NOT EXISTS loan_applications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -175,6 +206,10 @@ CREATE TABLE IF NOT EXISTS loan_applications (
 CREATE INDEX IF NOT EXISTS idx_loan_applications_user_id ON loan_applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_status ON loan_applications(status);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_application_number ON loan_applications(application_number);
+
+DO $$ BEGIN
+  ALTER TABLE loan_applications ADD CONSTRAINT loan_application_values_valid CHECK (loan_amount > 0 AND loan_term > 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Loans (approved/active loans)
 CREATE TABLE IF NOT EXISTS loans (
@@ -245,6 +280,10 @@ CREATE INDEX IF NOT EXISTS idx_payments_loan_id ON payments(loan_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(payment_status);
 CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments(payment_date);
+
+DO $$ BEGIN
+  ALTER TABLE payments ADD CONSTRAINT payment_amount_valid CHECK (payment_amount > 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Credit scores and assessments
 CREATE TABLE IF NOT EXISTS credit_scores (
@@ -416,6 +455,10 @@ CREATE TABLE IF NOT EXISTS user_roles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
+
+INSERT INTO admin_roles(name,description,permissions,status)
+VALUES ('PLATFORM_ADMIN','May review identity submissions and loan applications','["kyc:review","loans:review"]'::jsonb,'ACTIVE')
+ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,permissions=EXCLUDED.permissions,status='ACTIVE',updated_at=NOW();
 
 INSERT INTO loan_products(product_code,name,description,min_amount,max_amount,min_term,max_term,interest_rate,processing_fee,late_payment_fee,currency)
 VALUES

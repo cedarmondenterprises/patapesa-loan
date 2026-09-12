@@ -1,9 +1,100 @@
 import Link from 'next/link';
 import Layout from '../components/Layout';
 
-const products=[['Emergency loan','KES 1,000 – 50,000','1–6 months'],['Personal loan','KES 10,000 – 500,000','3–24 months'],['Business loan','KES 50,000 – 1,000,000','6–36 months']];
-export default function Home(){return <Layout title="PataPesa | Clear, responsible lending">
-  <section className="grid items-center gap-12 py-14 md:grid-cols-2"><div><span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">Built for Kenya</span><h1 className="mt-5 text-5xl font-black leading-tight">A clearer way to apply for credit.</h1><p className="mt-5 text-lg text-slate-600">See the cost before you apply, submit your details securely, and track the decision from your account.</p><div className="mt-8 flex gap-3"><Link href="/register" className="rounded-xl bg-emerald-700 px-6 py-3 font-bold text-white">Start application</Link><Link href="/loans" className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-bold">Compare loans</Link></div></div><div className="rounded-3xl bg-emerald-950 p-8 text-white shadow-xl"><p className="text-sm text-emerald-200">Representative example</p><p className="mt-3 text-4xl font-black">KES 50,000</p><div className="mt-8 grid grid-cols-2 gap-4 text-sm"><div><p className="text-emerald-300">Term</p><p className="text-xl font-bold">12 months</p></div><div><p className="text-emerald-300">Rate</p><p className="text-xl font-bold">15% p.a.</p></div><div><p className="text-emerald-300">Estimated interest</p><p className="text-xl font-bold">KES 7,500</p></div><div><p className="text-emerald-300">Total before fees</p><p className="text-xl font-bold">KES 57,500</p></div></div><p className="mt-6 text-xs text-emerald-200">Actual pricing and eligibility depend on assessment. No approval is guaranteed.</p></div></section>
-  <section className="py-12"><h2 className="text-3xl font-black">Choose what fits</h2><div className="mt-7 grid gap-5 md:grid-cols-3">{products.map(([name,amount,term])=><article key={name} className="rounded-2xl border bg-white p-6"><h3 className="text-xl font-bold">{name}</h3><p className="mt-4 font-semibold text-emerald-700">{amount}</p><p className="mt-1 text-sm text-slate-500">Repayment: {term}</p><Link href="/loans" className="mt-6 inline-block font-bold text-emerald-700">View terms →</Link></article>)}</div></section>
-  <section className="rounded-3xl bg-white p-8 shadow-sm"><h2 className="text-3xl font-black">How applications work</h2><div className="mt-7 grid gap-6 md:grid-cols-4">{['Create your secure account','Submit identity details','Choose amount and term','Track the review decision'].map((x,i)=><div key={x}><span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 font-black text-emerald-800">{i+1}</span><p className="mt-3 font-semibold">{x}</p></div>)}</div></section>
-  </Layout>}
+const products = [
+  ['Emergency loan', 'KES 1,000 – 50,000', '1–6 months'],
+  ['Personal loan', 'KES 10,000 – 500,000', '3–24 months'],
+  ['Business loan', 'KES 50,000 – 1,000,000', '6–36 months'],
+];
+export default function Home() {
+  return (
+    <Layout title="PataPesa | Clear, responsible lending">
+      <section className="grid items-center gap-12 py-14 md:grid-cols-2">
+        <div>
+          <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-800">
+            Built for Kenya
+          </span>
+          <h1 className="mt-5 text-5xl font-black leading-tight">
+            A clearer way to apply for credit.
+          </h1>
+          <p className="mt-5 text-lg text-slate-600">
+            See the cost before you apply, submit your details securely, and track the decision from
+            your account.
+          </p>
+          <div className="mt-8 flex gap-3">
+            <Link
+              href="/register"
+              className="rounded-xl bg-emerald-700 px-6 py-3 font-bold text-white"
+            >
+              Start application
+            </Link>
+            <Link
+              href="/loans"
+              className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-bold"
+            >
+              Compare loans
+            </Link>
+          </div>
+        </div>
+        <div className="rounded-3xl bg-emerald-950 p-8 text-white shadow-xl">
+          <p className="text-sm text-emerald-200">Representative example</p>
+          <p className="mt-3 text-4xl font-black">KES 50,000</p>
+          <div className="mt-8 grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-emerald-300">Term</p>
+              <p className="text-xl font-bold">12 months</p>
+            </div>
+            <div>
+              <p className="text-emerald-300">Rate</p>
+              <p className="text-xl font-bold">15% p.a.</p>
+            </div>
+            <div>
+              <p className="text-emerald-300">Estimated interest</p>
+              <p className="text-xl font-bold">KES 7,500</p>
+            </div>
+            <div>
+              <p className="text-emerald-300">Total before fees</p>
+              <p className="text-xl font-bold">KES 57,500</p>
+            </div>
+          </div>
+          <p className="mt-6 text-xs text-emerald-200">
+            Actual pricing and eligibility depend on assessment. No approval is guaranteed.
+          </p>
+        </div>
+      </section>
+      <section className="py-12">
+        <h2 className="text-3xl font-black">Choose what fits</h2>
+        <div className="mt-7 grid gap-5 md:grid-cols-3">
+          {products.map(([name, amount, term]) => (
+            <article key={name} className="rounded-2xl border bg-white p-6">
+              <h3 className="text-xl font-bold">{name}</h3>
+              <p className="mt-4 font-semibold text-emerald-700">{amount}</p>
+              <p className="mt-1 text-sm text-slate-500">Repayment: {term}</p>
+              <Link href="/loans" className="mt-6 inline-block font-bold text-emerald-700">
+                View terms →
+              </Link>
+            </article>
+          ))}
+        </div>
+      </section>
+      <section className="rounded-3xl bg-white p-8 shadow-sm">
+        <h2 className="text-3xl font-black">How applications work</h2>
+        <div className="mt-7 grid gap-6 md:grid-cols-4">
+          {[
+            'Create your secure account',
+            'Submit identity details',
+            'Choose amount and term',
+            'Track the review decision',
+          ].map((x, i) => (
+            <div key={x}>
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 font-black text-emerald-800">
+                {i + 1}
+              </span>
+              <p className="mt-3 font-semibold">{x}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </Layout>
+  );
+}

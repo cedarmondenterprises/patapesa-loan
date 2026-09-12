@@ -55,3 +55,5 @@ temp/
 .prettierignore
 *.tgz
 *.tsbuildinfo
+*.dump
+*.sql.gz

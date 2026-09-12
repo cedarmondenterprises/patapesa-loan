@@ -1,1 +1,26 @@
-import InfoPage from '../components/InfoPage';export default function Terms(){return <InfoPage title="Terms of use"><p>These terms govern access to the PataPesa application platform. You must provide accurate information and keep your credentials secure.</p><h2>Applications</h2><p>Submitting an application is a request for assessment, not a promise of credit. Approved terms must be reviewed and accepted before disbursement.</p><h2>Acceptable use</h2><p>You may not impersonate another person, provide fraudulent documents, disrupt the service or attempt unauthorised access.</p><h2>Repayment</h2><p>Repayment obligations are defined in the agreement presented for an approved loan. Contact support promptly if you anticipate difficulty paying.</p></InfoPage>}
+import InfoPage from '../components/InfoPage';
+export default function Terms() {
+  return (
+    <InfoPage title="Terms of use">
+      <p>
+        These terms govern access to the PataPesa application platform. You must provide accurate
+        information and keep your credentials secure.
+      </p>
+      <h2>Applications</h2>
+      <p>
+        Submitting an application is a request for assessment, not a promise of credit. Approved
+        terms must be reviewed and accepted before disbursement.
+      </p>
+      <h2>Acceptable use</h2>
+      <p>
+        You may not impersonate another person, provide fraudulent documents, disrupt the service or
+        attempt unauthorised access.
+      </p>
+      <h2>Repayment</h2>
+      <p>
+        Repayment obligations are defined in the agreement presented for an approved loan. Contact
+        support promptly if you anticipate difficulty paying.
+      </p>
+    </InfoPage>
+  );
+}

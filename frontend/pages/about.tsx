@@ -1,1 +1,21 @@
-import InfoPage from '../components/InfoPage';export default function About(){return <InfoPage title="About PataPesa"><p>PataPesa provides a digital process for Kenyan customers to compare loan products, submit applications and track their status.</p><h2>Responsible lending</h2><p>Applications are reviewed for identity, affordability and eligibility. Creating an account or submitting an application does not guarantee approval or disbursement.</p><h2>Transparent costs</h2><p>Available product limits, annual interest and processing fees are shown before an application is submitted.</p></InfoPage>}
+import InfoPage from '../components/InfoPage';
+export default function About() {
+  return (
+    <InfoPage title="About PataPesa">
+      <p>
+        PataPesa provides a digital process for Kenyan customers to compare loan products, submit
+        applications and track their status.
+      </p>
+      <h2>Responsible lending</h2>
+      <p>
+        Applications are reviewed for identity, affordability and eligibility. Creating an account
+        or submitting an application does not guarantee approval or disbursement.
+      </p>
+      <h2>Transparent costs</h2>
+      <p>
+        Available product limits, annual interest and processing fees are shown before an
+        application is submitted.
+      </p>
+    </InfoPage>
+  );
+}

@@ -1,30 +1,77 @@
 # PataPesa Loan Platform
 
-PataPesa is a working full-stack loan application portal for Kenya. Customers can create accounts, compare seeded loan products, submit identity details, apply for a loan, track applications, view payment history, and create persistent support requests.
+PataPesa is a full-stack Kenyan loan-application portal. Customers can register, submit encrypted identity details, compare loan products, apply, track applications, inspect payment history, recover accounts, and create support requests.
 
-## Stack
+## Architecture
 
-- Next.js 14, React, TypeScript and Tailwind CSS
-- Express, TypeScript and PostgreSQL
-- JWT authentication with bcrypt password hashing
-- Docker Compose for a reproducible deployment
+- Caddy terminates HTTPS and is the only public application service.
+- Next.js serves the frontend and proxies same-origin `/api` requests internally.
+- Express provides the API and issues signed sessions in Secure, HttpOnly cookies.
+- PostgreSQL stores application data on a private Docker network.
+- The API converges the idempotent schema on startup under a PostgreSQL advisory lock.
 
-## Run with Docker
+The database and API have no public host ports. This avoids the former browser bug where visitors were sent to `localhost:5000` on their own device.
 
-1. Copy `.env.example` to `.env` and replace every production secret.
-2. Run `docker compose up --build -d`.
-3. Open `http://localhost:3000`.
-4. Check API health at `http://localhost:5000/api/health`.
+## Azure VM deployment
 
-PostgreSQL runs `backend/schema.sql` on its first start. The schema creates the tables and three active loan products. If an existing database volume predates a schema change, apply the SQL migration manually or recreate only the development database volume.
+Prerequisites: an Ubuntu Azure VM, Docker Engine with the Compose plugin, a domain whose A record points to the VM, and inbound NSG rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP.
 
-## Run locally
+```bash
+git clone https://github.com/cedarmondenterprises/patapesa-loan.git
+cd patapesa-loan
+cp .env.example .env
+openssl rand -hex 48   # generate DB_PASSWORD
+openssl rand -hex 48   # generate JWT_SECRET
+openssl rand -hex 48   # generate a separate KYC_ENCRYPTION_KEY
+chmod 600 .env
+```
+
+Edit `.env`, set the domain and generated secrets, then configure SMTP. Password recovery requires working SMTP settings.
+
+```bash
+docker compose config
+docker compose build --pull
+docker compose up -d
+docker compose ps
+curl -fsS https://YOUR_DOMAIN/api/health
+```
+
+Caddy obtains and renews the TLS certificate automatically after DNS and ports are correct.
+
+## First staff account
+
+Create the staff member through the normal registration page, then grant the built-in platform administrator role from the VM:
+
+```bash
+docker compose exec backend npm run admin:grant -- staff@example.com
+```
+
+That user can sign in normally and open `https://YOUR_DOMAIN/admin` to review pending identity submissions and loan applications. Do not share staff accounts.
+
+## Updating safely
+
+Back up first, then pull, rebuild, and verify health:
+
+```bash
+docker compose exec -T postgres pg_dump -U patapesa -d patapesa_db -Fc > patapesa-$(date +%F).dump
+git pull --ff-only
+docker compose build --pull
+docker compose up -d
+docker compose ps
+```
+
+Keep `KYC_ENCRYPTION_KEY` stable and backed up securely: changing or losing it makes new encrypted identity values unusable. Never commit `.env` or database dumps.
+
+## Local development
+
+Start PostgreSQL locally and configure `backend/.env`, then:
 
 ```bash
 cd backend
 npm ci
 npm run build
-npm start
+npm test
+npm run dev
 ```
 
 In another terminal:
@@ -32,29 +79,30 @@ In another terminal:
 ```bash
 cd frontend
 npm ci
-npm run dev
+BACKEND_URL=http://localhost:5000 npm run dev
 ```
 
-The frontend expects `NEXT_PUBLIC_API_URL=http://localhost:5000/api`. The API expects PostgreSQL configuration and a strong `JWT_SECRET`.
+Open `http://localhost:3000`. The browser uses `/api`; the Next.js server forwards those calls to the API.
 
-## Implemented API
+## API surface
 
-- `GET /api/health`
-- `POST /api/auth/register`
-- `POST /api/auth/login`
+- `GET /api/health` and `GET /api/health/live`
+- `POST /api/auth/register`, `/login`, `/logout`
+- `POST /api/auth/forgot-password`, `/reset-password`
 - `GET /api/auth/me`
 - `GET /api/products`
 - `GET|POST /api/loans/applications`
 - `GET|POST /api/kyc`
 - `GET /api/payments`
 - `POST /api/contact`
+- `GET|PATCH /api/admin/applications` (staff permission required)
+- `GET|PATCH /api/admin/kyc` (staff permission required)
 
-Protected routes require `Authorization: Bearer <token>`.
+## Release checks
 
-## Production checklist
+```bash
+cd backend && npm ci && npm run build && npm test && npm run lint && npm audit --omit=dev
+cd ../frontend && npm ci && npm run type-check && npm run lint && npm run build && npm audit --omit=dev
+```
 
-- Use a long random `JWT_SECRET`; the server refuses the bundled development value in production.
-- Set exact allowed frontend origins in `CORS_ORIGIN`.
-- Set `DB_SSL=true` when required by the PostgreSQL provider.
-- Terminate TLS at the hosting platform or reverse proxy.
-- Complete your lending licence, disclosures, underwriting, data-protection procedures and payment-provider approval before offering credit to the public.
+Technical hardening does not replace lending authorization, customer disclosures, underwriting, complaints handling, data-protection impact assessment, retention rules, payment-provider approval, monitoring, backups, or an internal staff workflow. Complete those operational and legal controls before accepting real customers or money.
