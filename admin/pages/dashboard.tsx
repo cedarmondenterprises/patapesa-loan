@@ -40,32 +40,40 @@ export default function Dashboard() {
     [message, setMessage] = useState(''),
     [query, setQuery] = useState(''),
     [loading, setLoading] = useState(true),
+    [lastSync, setLastSync] = useState<Date | null>(null),
     [dialog, setDialog] = useState<Dialog | null>(null);
   const safe = async (path: string) =>
     api<{ data: Row[] | Metrics }>(path)
       .then((r) => r.data)
-      .catch(() => [] as Row[]);
-  async function load() {
+      .catch(() => null);
+  async function load(background = false) {
     try {
-      const me = await api<{ data: { roles: string[]; permissions: string[] } }>('/admin/me');
-      setRoles(me.data.roles);
-      setPermissions(me.data.permissions);
-      const [m, u, a, k, l, s, au] = await Promise.all([
+      if (!background) {
+        const me = await api<{ data: { roles: string[]; permissions: string[] } }>('/admin/me');
+        setRoles(me.data.roles);
+        setPermissions(me.data.permissions);
+      }
+      const [m, u, a, k] = await Promise.all([
         safe('/admin/dashboard'),
         safe('/admin/users'),
         safe('/admin/applications'),
         safe('/admin/kyc'),
-        safe('/admin/ledger'),
-        safe('/admin/support'),
-        safe('/admin/audit'),
       ]);
-      setMetrics(m as Metrics);
-      setUsers(u as Row[]);
-      setApps(a as Row[]);
-      setKyc(k as Row[]);
-      setLedger(l as Row[]);
-      setSupport(s as Row[]);
-      setAudit(au as Row[]);
+      if (m) setMetrics(m as Metrics);
+      if (u) setUsers(u as Row[]);
+      if (a) setApps(a as Row[]);
+      if (k) setKyc(k as Row[]);
+      if (!background) {
+        const [l, s, au] = await Promise.all([
+          safe('/admin/ledger'),
+          safe('/admin/support'),
+          safe('/admin/audit'),
+        ]);
+        if (l) setLedger(l as Row[]);
+        if (s) setSupport(s as Row[]);
+        if (au) setAudit(au as Row[]);
+      }
+      setLastSync(new Date());
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await router.replace('/');
@@ -73,13 +81,22 @@ export default function Dashboard() {
       }
       setMessage(error instanceof Error ? error.message : 'Unable to load dashboard');
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }
   useEffect(() => {
     void load();
-    const refresh = window.setInterval(() => void load(), 15_000);
-    return () => window.clearInterval(refresh);
+    const refresh = () => {
+      if (!document.hidden && navigator.onLine) void load(true);
+    };
+    const interval = window.setInterval(refresh, 30_000);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
   }, []);
   async function act(path: string, method: string, body: Row = {}, success = 'Action completed') {
     try {
@@ -182,6 +199,7 @@ export default function Dashboard() {
           <div>
             <p className="overline">PataPesa operations</p>
             <h1>{tab}</h1>
+            {lastSync && <small>Live data · updated {lastSync.toLocaleTimeString('en-KE')}</small>}
           </div>
           <span className="role-badge">{(roles[0] || 'STAFF').replace('_', ' ')}</span>
         </header>

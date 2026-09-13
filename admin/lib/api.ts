@@ -6,14 +6,40 @@ export class ApiError extends Error {
     super(message);
   }
 }
+const retryableStatuses = new Set([502, 503, 504]);
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-  });
-  if (response.status === 204) return undefined as T;
-  const data = await response.json().catch(() => ({ message: 'Invalid server response' }));
-  if (!response.ok) throw new ApiError(data.message || 'Request failed', response.status);
-  return data;
+  const method = (options.method || 'GET').toUpperCase();
+  const attempts = method === 'GET' || method === 'HEAD' ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    try {
+      const response = await fetch(`/api${path}`, {
+        ...options,
+        credentials: 'same-origin',
+        signal: controller.signal,
+        headers: {
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...options.headers,
+        },
+      });
+      if (retryableStatuses.has(response.status) && attempt + 1 < attempts) continue;
+      if (response.status === 204) return undefined as T;
+      const data = await response.json().catch(() => ({ message: 'Invalid server response' }));
+      if (!response.ok) throw new ApiError(data.message || 'Request failed', response.status);
+      return data;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (attempt + 1 < attempts) continue;
+      throw new ApiError(
+        typeof navigator !== 'undefined' && !navigator.onLine
+          ? 'You are offline. Live queues will resume when the connection returns.'
+          : 'The connection timed out. Please try again.',
+        0,
+      );
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+  throw new ApiError('Request failed', 0);
 }

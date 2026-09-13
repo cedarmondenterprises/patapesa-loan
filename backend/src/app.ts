@@ -73,7 +73,7 @@ app.use('/api', routes);
 app.use((_req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
 app.use(
   (
-    error: Error & { status?: number; type?: string; code?: string },
+    error: Error & { status?: number; type?: string; code?: string; constraint?: string },
     _req: Request,
     res: Response,
     _next: NextFunction,
@@ -86,9 +86,14 @@ app.use(
       return;
     }
     if (error.code === '23505') {
+      const duplicateApplication = [
+        'idx_loan_applications_request_id',
+      ].includes(error.constraint || '');
       res.status(409).json({
         success: false,
-        message: 'That account or identity record already exists',
+        message: duplicateApplication
+          ? 'This loan application has already been received'
+          : 'That account or identity record already exists',
         requestId,
       });
       return;

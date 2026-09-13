@@ -710,6 +710,18 @@ tbody tr:last-child td {
     transition: none !important;
   }
 }
+.connection-banner {
+  position: fixed;
+  z-index: 100;
+  inset: 0 0 auto;
+  padding: 10px 18px;
+  background: #8a3b24;
+  color: #fff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 4px 18px rgba(7, 29, 24, 0.22);
+}
 @media print {
   .sidebar,
   .top,

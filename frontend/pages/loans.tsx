@@ -16,6 +16,18 @@ type Product = {
   currency: string;
 };
 const kes = (n: number) => `KES ${Math.round(n).toLocaleString('en-KE')}`;
+const draftKey = 'patapesa-loan-draft-v1';
+type LoanDraft = {
+  productId: string;
+  requestId: string;
+  step: number;
+  amount: number;
+  term: number;
+  purposeCategory: string;
+  purpose: string;
+  repaymentSource: string;
+  existingMonthlyDebt: number;
+};
 
 export default function Loans() {
   const router = useRouter(),
@@ -29,15 +41,68 @@ export default function Loans() {
     [repaymentSource, setRepaymentSource] = useState(''),
     [existingMonthlyDebt, setExistingMonthlyDebt] = useState(0),
     [declarationAccepted, setDeclarationAccepted] = useState(false),
+    [requestId, setRequestId] = useState(''),
+    [draftReady, setDraftReady] = useState(false),
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
     [loadingProducts, setLoadingProducts] = useState(true);
   useEffect(() => {
     api<{ data: Product[] }>('/products')
-      .then((r) => setProducts(r.data))
+      .then((r) => {
+        setProducts(r.data);
+        try {
+          const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as LoanDraft | null;
+          const product = draft && r.data.find((item) => item.id === draft.productId);
+          if (draft && product) {
+            setSelected(product);
+            setRequestId(draft.requestId || crypto.randomUUID());
+            setStep(draft.step === 2 ? 2 : 1);
+            setAmount(draft.amount);
+            setTerm(draft.term);
+            setPurposeCategory(draft.purposeCategory);
+            setPurpose(draft.purpose);
+            setRepaymentSource(draft.repaymentSource);
+            setExistingMonthlyDebt(draft.existingMonthlyDebt);
+          }
+        } catch {
+          sessionStorage.removeItem(draftKey);
+        }
+      })
       .catch((e) => setMessage(e.message))
-      .finally(() => setLoadingProducts(false));
+      .finally(() => {
+        setDraftReady(true);
+        setLoadingProducts(false);
+      });
   }, []);
+  useEffect(() => {
+    if (!draftReady || !selected) return;
+    const timeout = window.setTimeout(() => {
+      const draft: LoanDraft = {
+        productId: selected.id,
+        requestId,
+        step,
+        amount,
+        term,
+        purposeCategory,
+        purpose,
+        repaymentSource,
+        existingMonthlyDebt,
+      };
+      sessionStorage.setItem(draftKey, JSON.stringify(draft));
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [
+    amount,
+    draftReady,
+    existingMonthlyDebt,
+    purpose,
+    purposeCategory,
+    repaymentSource,
+    requestId,
+    selected,
+    step,
+    term,
+  ]);
   const quote = useMemo(() => {
     if (!selected) return null;
     const interest = amount * (Number(selected.interestRate) / 100) * (term / 12),
@@ -54,6 +119,7 @@ export default function Loans() {
     setRepaymentSource('');
     setExistingMonthlyDebt(0);
     setDeclarationAccepted(false);
+    setRequestId(crypto.randomUUID());
     setStep(1);
     setMessage('');
   }
@@ -78,10 +144,12 @@ export default function Loans() {
             repaymentSource,
             existingMonthlyDebt,
             declarationAccepted,
+            requestId,
           }),
         },
       );
       setMessage(`${r.message}. Your reference is ${r.data.applicationNumber}.`);
+      sessionStorage.removeItem(draftKey);
       setSelected(null);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
@@ -322,6 +390,9 @@ export default function Loans() {
                 {loading ? 'Submitting…' : step === 1 ? 'Review costs' : 'Submit application'}
               </button>
             </div>
+            <p className="m-0 border-t border-pata-900/10 px-7 py-3 text-center text-xs text-slate-500">
+              Your unfinished answers survive a refresh in this browser tab.
+            </p>
           </form>
         </div>
       )}

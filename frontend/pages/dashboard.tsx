@@ -36,17 +36,14 @@ export default function Dashboard() {
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(true);
   const load = () =>
-    Promise.all([
-      api<{ data: User }>('/auth/me'),
-      api<{ data: Application[] }>('/loans/applications'),
-      api<{ data: Kyc }>('/kyc'),
-      api<{ data: Payment[] }>('/payments'),
-    ])
-      .then(([u, a, k, p]) => {
-        setUser(u.data);
-        setApps(a.data);
-        setKyc(k.data);
-        setPayments(p.data);
+    api<{
+      data: { user: User; applications: Application[]; kyc: Kyc; payments: Payment[] };
+    }>('/account/overview')
+      .then(({ data }) => {
+        setUser(data.user);
+        setApps(data.applications);
+        setKyc(data.kyc);
+        setPayments(data.payments);
       })
       .catch(() => router.replace('/login'))
       .finally(() => setLoading(false));

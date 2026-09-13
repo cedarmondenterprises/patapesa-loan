@@ -161,6 +161,7 @@ describe('API security and authentication surface', () => {
         { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
       ])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           id: '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2',
@@ -193,10 +194,43 @@ describe('API security and authentication surface', () => {
         repaymentSource: 'Monthly retail business income',
         existingMonthlyDebt: 0,
         declarationAccepted: true,
+        requestId: '3deae218-2879-4f3e-80b2-90bfd252708f',
       });
     expect(response.status).toBe(201);
     expect(response.body.data.status).toBe('SUBMITTED');
-    expect(queryMock.mock.calls[4][0]).toContain("'SUBMITTED'");
+    expect(queryMock.mock.calls[5][0]).toContain("'SUBMITTED'");
+  });
+
+  it('returns the original loan when a timed-out submission is replayed', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const requestId = '3deae218-2879-4f3e-80b2-90bfd252708f';
+    const token = createToken({ id, email: 'user@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([
+        { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
+      ])
+      .mockResolvedValueOnce([
+        { id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb', applicationNumber: 'PPL-TEST', status: 'SUBMITTED' },
+      ]);
+    const response = await request(app)
+      .post('/api/loans/applications')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        productId: '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2',
+        amount: 30000,
+        term: 12,
+        purposeCategory: 'BUSINESS',
+        purpose: 'Purchase additional stock for my retail shop',
+        repaymentSource: 'Monthly retail business income',
+        existingMonthlyDebt: 0,
+        declarationAccepted: true,
+        requestId,
+      });
+    expect(response.status).toBe(200);
+    expect(response.body.data.applicationNumber).toBe('PPL-TEST');
+    expect(queryMock).toHaveBeenCalledTimes(3);
   });
 
   it('allows a permitted staff member to read the review queue', async () => {

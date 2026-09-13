@@ -95,6 +95,13 @@ const cleanOptional = (value: unknown): string | null => {
   const text = String(value || '').trim();
   return text || null;
 };
+const normalizeKenyanPhone = (value: unknown): string => {
+  const compact = String(value || '').replace(/[\s()-]/g, '');
+  if (/^0[17]\d{8}$/.test(compact)) return `+254${compact.slice(1)}`;
+  if (/^[17]\d{8}$/.test(compact)) return `+254${compact}`;
+  if (/^254[17]\d{8}$/.test(compact)) return `+${compact}`;
+  return compact;
+};
 
 async function audit(
   req: AuthRequest,
@@ -128,8 +135,9 @@ router.post(
   body('lastName').trim().isLength({ min: 2, max: 100 }).withMessage('Last name is required'),
   body('email').isEmail().normalizeEmail().withMessage('Enter a valid email'),
   body('phone')
+    .customSanitizer(normalizeKenyanPhone)
     .matches(/^\+254[17]\d{8}$/)
-    .withMessage('Use a Kenyan number such as +254712345678'),
+    .withMessage('Use a Kenyan number such as 0712345678 or +254712345678'),
   body('dateOfBirth')
     .isISO8601({ strict: true })
     .custom((value) => {
@@ -489,11 +497,44 @@ router.get('/auth/me', requireAuth, async (req: AuthRequest, res, next) => {
   }
 });
 
+router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const id = userId(req);
+    const [users, applications, kycRows, payments] = await Promise.all([
+      query(
+        'SELECT id,email,phone,first_name AS "firstName",last_name AS "lastName",is_email_verified AS "emailVerified" FROM users WHERE id=$1',
+        [id],
+      ),
+      query(
+        'SELECT la.id,la.application_number AS "applicationNumber",lp.name AS product,la.loan_amount AS amount,la.loan_term AS term,la.purpose,la.status,la.interest_rate AS "interestRate",la.total_amount_payable AS "totalPayable",la.monthly_payment AS "monthlyPayment",la.created_at AS "createdAt" FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id WHERE la.user_id=$1 ORDER BY la.created_at DESC',
+        [id],
+      ),
+      query(
+        'SELECT id,id_type AS "idType",COALESCE(id_number_last4,RIGHT(id_number,4)) AS "idNumberLast4",verification_status AS status,rejection_reason AS "rejectionReason",created_at AS "createdAt" FROM kyc_verifications WHERE user_id=$1',
+        [id],
+      ),
+      query(
+        'SELECT id,payment_amount AS amount,currency,payment_method AS method,transaction_reference AS reference,payment_status AS status,payment_date AS "paymentDate" FROM payments WHERE user_id=$1 ORDER BY payment_date DESC',
+        [id],
+      ),
+    ]);
+    if (!users[0])
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    return res.json({
+      success: true,
+      data: { user: users[0], applications, kyc: kycRows[0] || null, payments },
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/products', async (_req, res, next) => {
   try {
     const rows = await query(
       'SELECT id,product_code AS code,name,description,min_amount AS "minAmount",max_amount AS "maxAmount",min_term AS "minTerm",max_term AS "maxTerm",interest_rate AS "interestRate",processing_fee AS "processingFee",currency FROM loan_products WHERE status=\'ACTIVE\' ORDER BY min_amount',
     );
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
     return res.json({ success: true, data: rows });
   } catch (error) {
     return next(error);
@@ -531,6 +572,7 @@ router.post(
   body('declarationAccepted')
     .equals('true')
     .withMessage('Confirm that this loan application is accurate'),
+  body('requestId').isUUID().withMessage('Application request identifier is invalid'),
   async (req: AuthRequest, res, next) => {
     try {
       const errors = errorsFor(req);
@@ -556,6 +598,18 @@ router.post(
         return res.status(409).json({
           success: false,
           message: 'Complete your employment and income profile before applying',
+        });
+      const replay = (
+        await query(
+          'SELECT id,application_number AS "applicationNumber",status,total_amount_payable AS "totalPayable",monthly_payment AS "monthlyPayment" FROM loan_applications WHERE user_id=$1 AND request_id=$2',
+          [userId(req), req.body.requestId],
+        )
+      )[0];
+      if (replay)
+        return res.json({
+          success: true,
+          message: 'Loan application was already received',
+          data: replay,
         });
       const openApplication = await query(
         "SELECT 1 FROM loan_applications WHERE user_id=$1 AND status IN ('SUBMITTED','UNDER_REVIEW','APPROVED') LIMIT 1",
@@ -613,12 +667,13 @@ router.post(
       const number = `PPL-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
       const application = (
         await query(
-          `INSERT INTO loan_applications(user_id,product_id,application_number,loan_amount,loan_term,purpose,purpose_category,repayment_source,existing_monthly_debt,affordability_ratio,declaration_accepted,status,interest_rate,processing_fee,total_amount_payable,monthly_payment)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,'SUBMITTED',$11,$12,$13,$14)
+          `INSERT INTO loan_applications(user_id,product_id,request_id,application_number,loan_amount,loan_term,purpose,purpose_category,repayment_source,existing_monthly_debt,affordability_ratio,declaration_accepted,status,interest_rate,processing_fee,total_amount_payable,monthly_payment)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,true,'SUBMITTED',$12,$13,$14,$15)
            RETURNING id,application_number AS "applicationNumber",status,total_amount_payable AS "totalPayable",monthly_payment AS "monthlyPayment"`,
           [
             userId(req),
             product.id,
+            req.body.requestId,
             number,
             amount,
             term,

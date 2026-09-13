@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS loan_applications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES loan_products(id),
+    request_id UUID,
     application_number VARCHAR(50) NOT NULL UNIQUE,
     loan_amount DECIMAL(12, 2) NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'KES',
@@ -244,12 +245,15 @@ CREATE TABLE IF NOT EXISTS loan_applications (
 CREATE INDEX IF NOT EXISTS idx_loan_applications_user_id ON loan_applications(user_id);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_status ON loan_applications(status);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_application_number ON loan_applications(application_number);
+CREATE INDEX IF NOT EXISTS idx_loan_applications_review_queue ON loan_applications(status,created_at);
 
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS request_id UUID;
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS purpose_category VARCHAR(40);
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS repayment_source VARCHAR(160);
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS existing_monthly_debt DECIMAL(12, 2) NOT NULL DEFAULT 0;
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS affordability_ratio DECIMAL(8, 4);
 ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS declaration_accepted BOOLEAN NOT NULL DEFAULT true;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_loan_applications_request_id ON loan_applications(request_id) WHERE request_id IS NOT NULL;
 
 DO $$ BEGIN
   ALTER TABLE loan_applications ADD CONSTRAINT loan_application_values_valid CHECK (loan_amount > 0 AND loan_term > 0);

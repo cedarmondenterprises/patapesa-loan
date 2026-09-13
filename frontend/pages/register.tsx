@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AuthShell from '../components/AuthShell';
@@ -65,6 +65,14 @@ const initial: FormState = {
   electronicCommunicationsConsent: false,
   marketingConsent: false,
 };
+const draftKey = 'patapesa-registration-draft-v1';
+const normalizePhone = (value: string) => {
+  const compact = value.replace(/[\s()-]/g, '');
+  if (/^0[17]\d{8}$/.test(compact)) return `+254${compact.slice(1)}`;
+  if (/^[17]\d{8}$/.test(compact)) return `+254${compact}`;
+  if (/^254[17]\d{8}$/.test(compact)) return `+${compact}`;
+  return compact;
+};
 const steps = ['About you', 'Home & work', 'Financial profile', 'Review & declare'];
 const employmentOptions = [
   ['SALARIED', 'Salaried employee'],
@@ -102,6 +110,7 @@ export default function Register() {
   const [reference, setReference] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
   const maxDob = useMemo(() => {
     const date = new Date();
     date.setFullYear(date.getFullYear() - 18);
@@ -114,6 +123,38 @@ export default function Register() {
     /\d/.test(form.password),
     /[^A-Za-z0-9]/.test(form.password),
   ];
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as
+          | { form?: Partial<FormState>; step?: number }
+          | null;
+        if (saved?.form) setForm((current) => ({ ...current, ...saved.form }));
+        if (Number.isInteger(saved?.step)) setStep(Math.min(3, Math.max(0, saved?.step || 0)));
+      } catch {
+        sessionStorage.removeItem(draftKey);
+      } finally {
+        setDraftReady(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+  useEffect(() => {
+    if (!draftReady || submitted) return;
+    const timeout = window.setTimeout(() => {
+      const safeForm: Partial<FormState> = { ...form };
+      delete safeForm.password;
+      delete safeForm.confirm;
+      delete safeForm.accuracyConfirmed;
+      delete safeForm.privacyAcknowledged;
+      delete safeForm.eligibilityAssessmentAcknowledged;
+      delete safeForm.electronicCommunicationsConsent;
+      delete safeForm.marketingConsent;
+      sessionStorage.setItem(draftKey, JSON.stringify({ form: safeForm, step }));
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [draftReady, form, step, submitted]);
 
   function update(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -145,6 +186,7 @@ export default function Register() {
           method: 'POST',
           body: JSON.stringify({
             ...form,
+            phone: normalizePhone(form.phone),
             yearsOfEmployment: Number(form.yearsOfEmployment),
             dependants: Number(form.dependants),
             remember: true,
@@ -154,6 +196,7 @@ export default function Register() {
       setMessage(result.message);
       setReference(result.data.registrationReference);
       setSubmitted(true);
+      sessionStorage.removeItem(draftKey);
       await router.push('/dashboard');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Registration failed');
@@ -210,6 +253,10 @@ export default function Register() {
               </li>
             ))}
           </ol>
+          <p className="mt-4 text-center text-xs text-slate-500">
+            Your unfinished answers survive a refresh in this browser tab. Passwords and
+            declarations are never saved.
+          </p>
           {message && (
             <p role="alert" className="notice notice-error mt-6">
               {message}
@@ -269,8 +316,8 @@ export default function Register() {
                     name="phone"
                     label="Kenyan mobile number"
                     type="tel"
-                    pattern="^\+254[17][0-9]{8}$"
-                    placeholder="+254712345678"
+                    pattern="^(?:\+?254|0)?[17][0-9]{8}$"
+                    placeholder="0712345678"
                     autoComplete="tel"
                     wide
                   />
