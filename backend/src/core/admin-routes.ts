@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { AuthRequest, requireAuth } from './auth';
 import { query, transaction } from './db';
 import { requirePermission } from './permissions';
+import { buildRegistrationPdf, RegistrationPdfRecord } from './registration-pdf';
 
 const router = Router();
 router.use(requireAuth);
@@ -68,7 +69,7 @@ router.get('/users', requirePermission('users:view'), async (req, res, next) => 
     const status = String(req.query.status || '').toUpperCase(),
       search = String(req.query.search || '').trim();
     const rows = await query(
-      `SELECT u.id,u.email,u.phone,u.first_name AS "firstName",u.last_name AS "lastName",u.status,u.last_login AS "lastLogin",u.created_at AS "createdAt",COALESCE(array_agg(ar.name) FILTER(WHERE ar.name IS NOT NULL),'{}') AS roles FROM users u LEFT JOIN user_roles ur ON ur.user_id=u.id LEFT JOIN admin_roles ar ON ar.id=ur.role_id WHERE ($1='' OR u.status=$1) AND ($2='' OR u.email ILIKE '%'||$2||'%' OR u.phone ILIKE '%'||$2||'%' OR (u.first_name||' '||u.last_name) ILIKE '%'||$2||'%') GROUP BY u.id ORDER BY u.created_at DESC LIMIT 500`,
+      `SELECT u.id,u.email,u.phone,u.first_name AS "firstName",u.last_name AS "lastName",u.status,u.last_login AS "lastLogin",u.created_at AS "createdAt",rs.reference AS "registrationReference",COALESCE(array_agg(ar.name) FILTER(WHERE ar.name IS NOT NULL),'{}') AS roles FROM users u LEFT JOIN registration_submissions rs ON rs.user_id=u.id LEFT JOIN user_roles ur ON ur.user_id=u.id LEFT JOIN admin_roles ar ON ar.id=ur.role_id WHERE ($1='' OR u.status=$1) AND ($2='' OR u.email ILIKE '%'||$2||'%' OR u.phone ILIKE '%'||$2||'%' OR (u.first_name||' '||u.last_name) ILIKE '%'||$2||'%' OR rs.reference ILIKE '%'||$2||'%') GROUP BY u.id,rs.reference ORDER BY u.created_at DESC LIMIT 500`,
       [status, search],
     );
     return res.json({ success: true, data: rows });
@@ -76,6 +77,66 @@ router.get('/users', requirePermission('users:view'), async (req, res, next) => 
     return next(error);
   }
 });
+
+async function registrationRecord(id: string): Promise<RegistrationPdfRecord | null> {
+  const row = (
+    await query<{
+      reference: string;
+      formVersion: string;
+      submittedAt: string;
+      status: string;
+      answers: Record<string, unknown>;
+      declarations: Record<string, unknown>;
+    }>(
+      `SELECT rs.reference,rs.form_version AS "formVersion",rs.submitted_at AS "submittedAt",
+       u.status,rs.answers,rs.declarations
+       FROM registration_submissions rs JOIN users u ON u.id=rs.user_id
+       WHERE rs.user_id=$1 AND u.deleted_at IS NULL`,
+      [id],
+    )
+  )[0];
+  return row || null;
+}
+
+router.get(
+  '/users/:id/registration',
+  requirePermission('users:view'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const id = idParam(req);
+      if (!validUuid(id)) return res.status(400).json({ success: false, message: 'Invalid user' });
+      const registration = await registrationRecord(id);
+      if (!registration)
+        return res.status(404).json({ success: false, message: 'Registration record not found' });
+      await record(req, 'REGISTRATION_VIEWED', 'registration', id);
+      return res.json({ success: true, data: registration });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get(
+  '/users/:id/registration.pdf',
+  requirePermission('users:view'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const id = idParam(req);
+      if (!validUuid(id)) return res.status(400).json({ success: false, message: 'Invalid user' });
+      const registration = await registrationRecord(id);
+      if (!registration)
+        return res.status(404).json({ success: false, message: 'Registration record not found' });
+      const pdf = await buildRegistrationPdf(registration);
+      await record(req, 'REGISTRATION_PDF_EXPORTED', 'registration', id);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${registration.reference}.pdf"`);
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      return res.status(200).send(pdf);
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
 
 router.patch(
   '/users/:id/status',

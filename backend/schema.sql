@@ -79,6 +79,27 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_user_profiles_user_id ON user_profiles(user_id);
 
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS income_range VARCHAR(40);
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS source_of_income VARCHAR(120);
+ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ;
+
+-- Immutable, versioned snapshot of the answers and declarations submitted at registration.
+-- Keeping this separate from the editable profile preserves the record staff reviewed.
+CREATE TABLE IF NOT EXISTS registration_submissions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    reference VARCHAR(40) NOT NULL UNIQUE,
+    form_version VARCHAR(20) NOT NULL,
+    answers JSONB NOT NULL,
+    declarations JSONB NOT NULL,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address INET,
+    user_agent TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_registration_submissions_submitted_at
+    ON registration_submissions(submitted_at DESC);
+
 -- Verification codes table
 CREATE TABLE IF NOT EXISTS verification_codes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -11,6 +11,13 @@ export default function Terms() {
         Submitting an application is a request for assessment, not a promise of credit. Approved
         terms must be reviewed and accepted before disbursement.
       </p>
+      <h2>Your registration declaration</h2>
+      <p>
+        You must use your legal identity and provide information that is complete and accurate to
+        the best of your knowledge. PataPesa keeps the submitted answers and declaration version as
+        an application record. Registration, administrative activation and identity verification are
+        separate steps and none of them alone creates a credit agreement.
+      </p>
       <h2>Acceptable use</h2>
       <p>
         You may not impersonate another person, provide fraudulent documents, disrupt the service or

@@ -8,12 +8,14 @@ export default function AuthShell({
   eyebrow,
   heading,
   copy,
+  wide = false,
   children,
 }: {
   title: string;
   eyebrow: string;
   heading: string;
   copy: string;
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -41,7 +43,7 @@ export default function AuthShell({
           </p>
         </section>
         <section className="flex min-h-screen items-center justify-center px-5 py-10">
-          <div className="w-full max-w-md">
+          <div className={`w-full ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
             <div className="mb-10 flex justify-between lg:hidden">
               <Brand />
               <Link href="/" className="text-sm font-bold text-pata-800">

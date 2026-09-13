@@ -47,6 +47,36 @@ const userId = (req: AuthRequest): string => {
   if (!req.user) throw Object.assign(new Error('Authentication required'), { status: 401 });
   return req.user.id;
 };
+const registrationVersion = '2026-09-13';
+const employmentTypes = [
+  'SALARIED',
+  'SELF_EMPLOYED',
+  'BUSINESS_OWNER',
+  'UNEMPLOYED',
+  'STUDENT',
+  'RETIRED',
+];
+const incomeRanges = [
+  'BELOW_15000',
+  '15000_29999',
+  '30000_49999',
+  '50000_99999',
+  '100000_199999',
+  '200000_PLUS',
+];
+const educationLevels = [
+  'PRIMARY',
+  'SECONDARY',
+  'CERTIFICATE',
+  'DIPLOMA',
+  'BACHELORS',
+  'POSTGRADUATE',
+  'OTHER',
+];
+const cleanOptional = (value: unknown): string | null => {
+  const text = String(value || '').trim();
+  return text || null;
+};
 
 async function audit(
   req: AuthRequest,
@@ -82,6 +112,48 @@ router.post(
   body('phone')
     .matches(/^\+254[17]\d{8}$/)
     .withMessage('Use a Kenyan number such as +254712345678'),
+  body('dateOfBirth')
+    .isISO8601({ strict: true })
+    .custom((value) => {
+      const birth = new Date(`${value}T00:00:00Z`),
+        now = new Date(),
+        adultDate = new Date(
+          Date.UTC(now.getUTCFullYear() - 18, now.getUTCMonth(), now.getUTCDate()),
+        ),
+        oldestDate = new Date(
+          Date.UTC(now.getUTCFullYear() - 100, now.getUTCMonth(), now.getUTCDate()),
+        );
+      if (birth > adultDate || birth < oldestDate)
+        throw new Error('You must be between 18 and 100 years old');
+      return true;
+    }),
+  body('nationality').trim().isLength({ min: 2, max: 3 }).isAlpha(),
+  body('addressLine1').trim().isLength({ min: 5, max: 255 }),
+  body('addressLine2').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
+  body('city').trim().isLength({ min: 2, max: 100 }),
+  body('county').trim().isLength({ min: 2, max: 100 }),
+  body('postalCode').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
+  body('employmentType').isIn(employmentTypes),
+  body('occupation').trim().isLength({ min: 2, max: 100 }),
+  body('employerName').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
+  body('industry').trim().isLength({ min: 2, max: 100 }),
+  body('yearsOfEmployment').isInt({ min: 0, max: 80 }).toInt(),
+  body('incomeRange').isIn(incomeRanges),
+  body('sourceOfIncome').trim().isLength({ min: 2, max: 120 }),
+  body('educationLevel').isIn(educationLevels),
+  body('maritalStatus')
+    .optional({ values: 'falsy' })
+    .isIn(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED', 'PREFER_NOT_TO_SAY']),
+  body('dependants').isInt({ min: 0, max: 30 }).toInt(),
+  body('accuracyConfirmed').equals('true').withMessage('Confirm that your information is accurate'),
+  body('privacyAcknowledged').equals('true').withMessage('Acknowledge the privacy notice'),
+  body('eligibilityAssessmentAcknowledged')
+    .equals('true')
+    .withMessage('Acknowledge the eligibility assessment described'),
+  body('electronicCommunicationsConsent')
+    .equals('true')
+    .withMessage('Consent to electronic records and communications'),
+  body('marketingConsent').optional().isBoolean().toBoolean(),
   body('remember').optional().isBoolean().toBoolean(),
   passwordRule(),
   async (req, res, next) => {
@@ -89,21 +161,123 @@ router.post(
       const errors = errorsFor(req);
       if (errors.length)
         return res.status(400).json({ success: false, message: errors[0], errors });
-      const { firstName, lastName, email, phone, password } = req.body;
+      const {
+        firstName,
+        lastName,
+        email,
+        phone,
+        password,
+        dateOfBirth,
+        nationality,
+        addressLine1,
+        city,
+        county,
+        employmentType,
+        occupation,
+        industry,
+        yearsOfEmployment,
+        incomeRange,
+        sourceOfIncome,
+        educationLevel,
+        dependants,
+      } = req.body;
       const hash = await bcrypt.hash(password, 12);
-      const user = (
-        await query<{
-          id: string;
-          email: string;
-          phone: string;
-          first_name: string;
-          last_name: string;
-          auth_version: number;
-        }>(
-          'INSERT INTO users(email,phone,password_hash,first_name,last_name) VALUES($1,$2,$3,$4,$5) RETURNING id,email,phone,first_name,last_name,auth_version',
-          [email, phone, hash, firstName, lastName],
-        )
-      )[0];
+      const reference = `PPR-${new Date()
+        .toISOString()
+        .slice(0, 10)
+        .replace(/-/g, '')}-${randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+      const answers = {
+        firstName,
+        lastName,
+        email,
+        phone,
+        dateOfBirth,
+        nationality: String(nationality).toUpperCase(),
+        addressLine1,
+        addressLine2: cleanOptional(req.body.addressLine2),
+        city,
+        county,
+        postalCode: cleanOptional(req.body.postalCode),
+        country: 'Kenya',
+        employmentType,
+        occupation,
+        employerName: cleanOptional(req.body.employerName),
+        industry,
+        yearsOfEmployment,
+        incomeRange,
+        sourceOfIncome,
+        educationLevel,
+        maritalStatus: cleanOptional(req.body.maritalStatus),
+        dependants,
+      };
+      const declarations = {
+        accuracyConfirmed: true,
+        privacyAcknowledged: true,
+        eligibilityAssessmentAcknowledged: true,
+        electronicCommunicationsConsent: true,
+        marketingConsent: req.body.marketingConsent === true,
+        acceptedAt: new Date().toISOString(),
+        version: registrationVersion,
+      };
+      const user = await transaction(async (client) => {
+        const created = (
+          await client.query<{
+            id: string;
+            email: string;
+            phone: string;
+            first_name: string;
+            last_name: string;
+            auth_version: number;
+          }>(
+            'INSERT INTO users(email,phone,password_hash,first_name,last_name,date_of_birth,nationality) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,email,phone,first_name,last_name,auth_version',
+            [
+              email,
+              phone,
+              hash,
+              firstName,
+              lastName,
+              dateOfBirth,
+              String(nationality).toUpperCase(),
+            ],
+          )
+        ).rows[0];
+        await client.query(
+          `INSERT INTO user_profiles(user_id,employment_type,employment_status,employer_name,occupation,industry,years_of_employment,educational_qualification,marital_status,number_of_dependents,address_line1,address_line2,city,state_province,postal_code,country,income_range,source_of_income,profile_completed_at)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Kenya',$16,$17,NOW())`,
+          [
+            created.id,
+            employmentType,
+            employmentType,
+            cleanOptional(req.body.employerName),
+            occupation,
+            industry,
+            yearsOfEmployment,
+            educationLevel,
+            cleanOptional(req.body.maritalStatus),
+            dependants,
+            addressLine1,
+            cleanOptional(req.body.addressLine2),
+            city,
+            county,
+            cleanOptional(req.body.postalCode),
+            incomeRange,
+            sourceOfIncome,
+          ],
+        );
+        await client.query(
+          'INSERT INTO registration_submissions(user_id,reference,form_version,answers,declarations,ip_address,user_agent) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [
+            created.id,
+            reference,
+            registrationVersion,
+            JSON.stringify(answers),
+            JSON.stringify(declarations),
+            req.ip || null,
+            req.get('user-agent')?.slice(0, 1000) || null,
+          ],
+        );
+        return created;
+      });
       await audit(req, 'ACCOUNT_REGISTERED', 'user', user.id, user.id);
       return res.status(201).json({
         success: true,
@@ -117,6 +291,7 @@ router.post(
             firstName: user.first_name,
             lastName: user.last_name,
           },
+          registrationReference: reference,
         },
       });
     } catch (error) {

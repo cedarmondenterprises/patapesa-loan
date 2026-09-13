@@ -26,6 +26,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
     const cookie = upstream.headers.get('set-cookie');
     if (cookie) res.setHeader('set-cookie', cookie);
+    const contentType = upstream.headers.get('content-type');
+    const contentDisposition = upstream.headers.get('content-disposition');
+    if (contentType) res.setHeader('content-type', contentType);
+    if (contentDisposition) res.setHeader('content-disposition', contentDisposition);
     res.setHeader('Cache-Control', 'no-store');
     res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
   } catch {

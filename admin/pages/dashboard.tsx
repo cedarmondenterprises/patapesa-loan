@@ -91,6 +91,9 @@ export default function Dashboard() {
   function ask(config: Dialog) {
     setDialog(config);
   }
+  function openRegistrationPdf(id: Row[string]) {
+    window.open(`/api/admin/users/${id}/registration.pdf`, '_blank', 'noopener,noreferrer');
+  }
   async function signout() {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
     await router.push('/');
@@ -198,13 +201,22 @@ export default function Dashboard() {
                   placeholder="Search pending registrations"
                 />
                 <Table
-                  heads={['Customer', 'Contact', 'Registered', 'Decision']}
+                  heads={['Customer', 'Reference', 'Registered', 'Application', 'Decision']}
                   rows={filtered
                     .filter((u) => u.status === 'PENDING')
                     .map((u) => [
                       <Person row={u} key="p" />,
-                      `${u.email}\n${u.phone}`,
+                      u.registrationReference || 'Legacy registration',
                       date(u.createdAt),
+                      u.registrationReference ? (
+                        <div className="actions" key="pdf">
+                          <button onClick={() => openRegistrationPdf(u.id)}>
+                            Open / print PDF
+                          </button>
+                        </div>
+                      ) : (
+                        'Not available'
+                      ),
                       <div className="actions" key="a">
                         <button
                           className="approve"
@@ -265,6 +277,9 @@ export default function Dashboard() {
                     date(u.lastLogin),
                     String(u.roles || '—'),
                     <div className="actions" key="m">
+                      {u.registrationReference && (
+                        <button onClick={() => openRegistrationPdf(u.id)}>Application PDF</button>
+                      )}
                       <button
                         className={u.status === 'ACTIVE' ? 'danger' : ''}
                         onClick={() =>

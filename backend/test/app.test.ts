@@ -3,9 +3,10 @@ import request from 'supertest';
 process.env.NODE_ENV = 'test';
 
 const queryMock = jest.fn();
+const transactionMock = jest.fn();
 jest.mock('../src/core/db', () => ({
   query: (...args: unknown[]) => queryMock(...args),
-  transaction: jest.fn(),
+  transaction: (...args: unknown[]) => transactionMock(...args),
   pool: { query: jest.fn().mockResolvedValue({ rows: [] }) },
 }));
 
@@ -13,7 +14,10 @@ import app from '../src/app';
 import { createToken } from '../src/core/auth';
 
 describe('API security and authentication surface', () => {
-  beforeEach(() => queryMock.mockReset());
+  beforeEach(() => {
+    queryMock.mockReset();
+    transactionMock.mockReset();
+  });
 
   it('reports liveness without exposing server details', async () => {
     const response = await request(app).get('/api/health/live');
@@ -37,18 +41,24 @@ describe('API security and authentication surface', () => {
   });
 
   it('creates a pending registration without authenticating it', async () => {
-    queryMock
-      .mockResolvedValueOnce([
-        {
-          id: '8f95d132-4665-4c15-8623-652e76f18c70',
-          email: 'user@example.com',
-          phone: '+254712345678',
-          first_name: 'Jane',
-          last_name: 'Doe',
-          auth_version: 0,
-        },
-      ])
-      .mockResolvedValueOnce([]);
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '8f95d132-4665-4c15-8623-652e76f18c70',
+            email: 'user@example.com',
+            phone: '+254712345678',
+            first_name: 'Jane',
+            last_name: 'Doe',
+            auth_version: 0,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
+    queryMock.mockResolvedValueOnce([]);
     const response = await request(app)
       .post('/api/auth/register')
       .set('Origin', 'http://localhost:3000')
@@ -57,6 +67,28 @@ describe('API security and authentication surface', () => {
         lastName: 'Doe',
         email: 'user@example.com',
         phone: '+254712345678',
+        dateOfBirth: '1992-04-12',
+        nationality: 'KEN',
+        addressLine1: '12 Market Road',
+        addressLine2: '',
+        city: 'Nairobi',
+        county: 'Nairobi',
+        postalCode: '00100',
+        employmentType: 'SALARIED',
+        occupation: 'Technician',
+        employerName: 'Example Limited',
+        industry: 'Energy',
+        yearsOfEmployment: 4,
+        incomeRange: '50000_99999',
+        sourceOfIncome: 'Employment salary',
+        educationLevel: 'DIPLOMA',
+        maritalStatus: 'SINGLE',
+        dependants: 1,
+        accuracyConfirmed: true,
+        privacyAcknowledged: true,
+        eligibilityAssessmentAcknowledged: true,
+        electronicCommunicationsConsent: true,
+        marketingConsent: false,
         password: 'StrongPass1!',
         remember: true,
       });
@@ -64,6 +96,8 @@ describe('API security and authentication surface', () => {
     expect(response.body.data.token).toBeUndefined();
     expect(response.headers['set-cookie']).toBeUndefined();
     expect(response.body.message).toContain('administrator must approve');
+    expect(response.body.data.registrationReference).toMatch(/^PPR-/);
+    expect(clientQuery).toHaveBeenCalledTimes(3);
   });
 
   it('denies the staff queue when the authenticated user lacks permission', async () => {
