@@ -47,7 +47,7 @@ router.get('/dashboard', requirePermission('dashboard:view'), async (_req, res, 
     const data = (
       await query(`SELECT
   (SELECT COUNT(*) FROM users WHERE status='ACTIVE') AS "activeUsers",
-  (SELECT COUNT(*) FROM users WHERE status='PENDING') AS "pendingRegistrations",
+  (SELECT COUNT(*) FROM registration_submissions WHERE submitted_at>=CURRENT_DATE-INTERVAL '7 days') AS "recentRegistrations",
   (SELECT COUNT(*) FROM loan_applications WHERE status IN ('SUBMITTED','UNDER_REVIEW')) AS "pendingApplications",
   (SELECT COUNT(*) FROM kyc_verifications WHERE verification_status='PENDING') AS "pendingKyc",
   (SELECT COALESCE(SUM(principal_amount),0) FROM loans WHERE status IN ('ACTIVE','COMPLETED','DEFAULTED')) AS "totalDisbursed",
@@ -169,6 +169,19 @@ router.patch(
           return res.status(403).json({
             success: false,
             message: 'Only a Super Admin can change another staff account',
+          });
+      }
+      if (status === 'ACTIVE') {
+        const eligible = await query(
+          `SELECT 1 FROM users u JOIN user_profiles up ON up.user_id=u.id
+           WHERE u.id=$1 AND u.date_of_birth<=CURRENT_DATE-INTERVAL '18 years'
+           AND up.profile_completed_at IS NOT NULL`,
+          [id],
+        );
+        if (!eligible.length)
+          return res.status(409).json({
+            success: false,
+            message: 'Only an adult customer with a complete profile can be activated',
           });
       }
       const row = (

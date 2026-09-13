@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     nationality VARCHAR(3),
     gender VARCHAR(10),
     profile_picture_url TEXT,
-    status VARCHAR(50) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED')),
+    status VARCHAR(50) DEFAULT 'ACTIVE' CHECK (status IN ('PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED')),
     is_email_verified BOOLEAN DEFAULT false,
     is_phone_verified BOOLEAN DEFAULT false,
     email_verified_at TIMESTAMP,
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ALTER COLUMN status SET DEFAULT 'PENDING';
+ALTER TABLE users ALTER COLUMN status SET DEFAULT 'ACTIVE';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;
 ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('PENDING','ACTIVE','INACTIVE','SUSPENDED','REJECTED','DELETED'));
 
@@ -99,6 +99,15 @@ CREATE TABLE IF NOT EXISTS registration_submissions (
 
 CREATE INDEX IF NOT EXISTS idx_registration_submissions_submitted_at
     ON registration_submissions(submitted_at DESC);
+
+-- Complete adult registrations no longer wait for manual account activation.
+UPDATE users u SET status='ACTIVE',updated_at=NOW()
+WHERE u.status='PENDING'
+  AND u.date_of_birth<=CURRENT_DATE-INTERVAL '18 years'
+  AND EXISTS (
+    SELECT 1 FROM user_profiles up
+    WHERE up.user_id=u.id AND up.profile_completed_at IS NOT NULL
+  );
 
 -- Verification codes table
 CREATE TABLE IF NOT EXISTS verification_codes (
@@ -213,6 +222,11 @@ CREATE TABLE IF NOT EXISTS loan_applications (
     currency VARCHAR(3) NOT NULL DEFAULT 'KES',
     loan_term INTEGER NOT NULL,
     purpose VARCHAR(255),
+    purpose_category VARCHAR(40),
+    repayment_source VARCHAR(160),
+    existing_monthly_debt DECIMAL(12, 2) NOT NULL DEFAULT 0,
+    affordability_ratio DECIMAL(8, 4),
+    declaration_accepted BOOLEAN NOT NULL DEFAULT true,
     status VARCHAR(50) DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED', 'CANCELLED')),
     interest_rate DECIMAL(5, 2),
     processing_fee DECIMAL(12, 2),
@@ -231,8 +245,17 @@ CREATE INDEX IF NOT EXISTS idx_loan_applications_user_id ON loan_applications(us
 CREATE INDEX IF NOT EXISTS idx_loan_applications_status ON loan_applications(status);
 CREATE INDEX IF NOT EXISTS idx_loan_applications_application_number ON loan_applications(application_number);
 
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS purpose_category VARCHAR(40);
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS repayment_source VARCHAR(160);
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS existing_monthly_debt DECIMAL(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS affordability_ratio DECIMAL(8, 4);
+ALTER TABLE loan_applications ADD COLUMN IF NOT EXISTS declaration_accepted BOOLEAN NOT NULL DEFAULT true;
+
 DO $$ BEGIN
   ALTER TABLE loan_applications ADD CONSTRAINT loan_application_values_valid CHECK (loan_amount > 0 AND loan_term > 0);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE loan_applications ADD CONSTRAINT loan_application_debt_valid CHECK (existing_monthly_debt >= 0);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Loans (approved/active loans)

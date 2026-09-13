@@ -73,6 +73,24 @@ const educationLevels = [
   'POSTGRADUATE',
   'OTHER',
 ];
+const loanPurposeCategories = [
+  'EMERGENCY',
+  'MEDICAL',
+  'EDUCATION',
+  'BUSINESS',
+  'HOME',
+  'TRANSPORT',
+  'AGRICULTURE',
+  'OTHER',
+];
+const incomeReference: Record<string, number> = {
+  BELOW_15000: 15000,
+  '15000_29999': 15000,
+  '30000_49999': 30000,
+  '50000_99999': 50000,
+  '100000_199999': 100000,
+  '200000_PLUS': 200000,
+};
 const cleanOptional = (value: unknown): string | null => {
   const text = String(value || '').trim();
   return text || null;
@@ -229,7 +247,7 @@ router.post(
             last_name: string;
             auth_version: number;
           }>(
-            'INSERT INTO users(email,phone,password_hash,first_name,last_name,date_of_birth,nationality) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,email,phone,first_name,last_name,auth_version',
+            "INSERT INTO users(email,phone,password_hash,first_name,last_name,date_of_birth,nationality,status) VALUES($1,$2,$3,$4,$5,$6,$7,'ACTIVE') RETURNING id,email,phone,first_name,last_name,auth_version",
             [
               email,
               phone,
@@ -279,10 +297,14 @@ router.post(
         return created;
       });
       await audit(req, 'ACCOUNT_REGISTERED', 'user', user.id, user.id);
+      setAuthCookie(
+        res,
+        createToken({ id: user.id, email: user.email, authVersion: user.auth_version }),
+        req.body.remember !== false,
+      );
       return res.status(201).json({
         success: true,
-        message:
-          'Registration received. An administrator must approve your account before you can sign in.',
+        message: 'Your account is active. You can now continue to identity verification.',
         data: {
           user: {
             id: user.id,
@@ -496,22 +518,54 @@ router.post(
   body('productId').isUUID(),
   body('amount').isFloat({ min: 1000, max: 1000000 }),
   body('term').isInt({ min: 1, max: 36 }),
-  body('purpose').trim().isLength({ min: 5, max: 255 }),
+  body('purposeCategory').isIn(loanPurposeCategories),
+  body('purpose')
+    .trim()
+    .isLength({ min: 20, max: 255 })
+    .withMessage('Explain the intended use in at least 20 characters'),
+  body('repaymentSource')
+    .trim()
+    .isLength({ min: 3, max: 160 })
+    .withMessage('Explain how you expect to repay this loan'),
+  body('existingMonthlyDebt').isFloat({ min: 0, max: 10000000 }).toFloat(),
+  body('declarationAccepted')
+    .equals('true')
+    .withMessage('Confirm that this loan application is accurate'),
   async (req: AuthRequest, res, next) => {
     try {
       const errors = errorsFor(req);
       if (errors.length)
         return res.status(400).json({ success: false, message: errors[0], errors });
-      const kyc = (
-        await query<{ verification_status: string }>(
-          'SELECT verification_status FROM kyc_verifications WHERE user_id=$1',
+      const eligibility = (
+        await query<{
+          age_years: number | null;
+          profile_completed_at: string | null;
+          income_range: string | null;
+        }>(
+          `SELECT EXTRACT(YEAR FROM age(CURRENT_DATE,u.date_of_birth))::int AS age_years,
+           up.profile_completed_at,up.income_range FROM users u
+           LEFT JOIN user_profiles up ON up.user_id=u.id WHERE u.id=$1`,
           [userId(req)],
         )
       )[0];
-      if (!kyc)
+      if (!eligibility || eligibility.age_years === null || eligibility.age_years < 18)
         return res
-          .status(409)
-          .json({ success: false, message: 'Submit your identity details before applying' });
+          .status(403)
+          .json({ success: false, message: 'Applicants must be at least 18 years old' });
+      if (!eligibility.profile_completed_at || !eligibility.income_range)
+        return res.status(409).json({
+          success: false,
+          message: 'Complete your employment and income profile before applying',
+        });
+      const openApplication = await query(
+        "SELECT 1 FROM loan_applications WHERE user_id=$1 AND status IN ('SUBMITTED','UNDER_REVIEW','APPROVED') LIMIT 1",
+        [userId(req)],
+      );
+      if (openApplication.length)
+        return res.status(409).json({
+          success: false,
+          message: 'You already have an application awaiting a decision',
+        });
       const product = (
         await query<{
           id: string;
@@ -545,10 +599,23 @@ router.post(
         Number(product.processing_fee || 0),
         term,
       );
+      const existingDebt = Number(req.body.existingMonthlyDebt),
+        referenceIncome = incomeReference[eligibility.income_range] || 0,
+        affordabilityRatio = referenceIncome
+          ? (quote.monthly + existingDebt) / referenceIncome
+          : Number.POSITIVE_INFINITY;
+      if (!Number.isFinite(affordabilityRatio) || affordabilityRatio > 0.5)
+        return res.status(422).json({
+          success: false,
+          message:
+            'The estimated monthly commitment is above 50% of your declared income range. Choose a lower amount or longer term.',
+        });
       const number = `PPL-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
       const application = (
         await query(
-          'INSERT INTO loan_applications(user_id,product_id,application_number,loan_amount,loan_term,purpose,status,interest_rate,processing_fee,total_amount_payable,monthly_payment) VALUES($1,$2,$3,$4,$5,$6,\'SUBMITTED\',$7,$8,$9,$10) RETURNING id,application_number AS "applicationNumber",status,total_amount_payable AS "totalPayable",monthly_payment AS "monthlyPayment"',
+          `INSERT INTO loan_applications(user_id,product_id,application_number,loan_amount,loan_term,purpose,purpose_category,repayment_source,existing_monthly_debt,affordability_ratio,declaration_accepted,status,interest_rate,processing_fee,total_amount_payable,monthly_payment)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true,'SUBMITTED',$11,$12,$13,$14)
+           RETURNING id,application_number AS "applicationNumber",status,total_amount_payable AS "totalPayable",monthly_payment AS "monthlyPayment"`,
           [
             userId(req),
             product.id,
@@ -556,6 +623,10 @@ router.post(
             amount,
             term,
             req.body.purpose,
+            req.body.purposeCategory,
+            req.body.repaymentSource,
+            existingDebt,
+            affordabilityRatio,
             product.interest_rate,
             quote.fee,
             quote.total,
@@ -641,9 +712,14 @@ router.get(
     try {
       const rows =
         await query(`SELECT la.id,la.application_number AS "applicationNumber",la.loan_amount AS amount,
-    la.loan_term AS term,la.purpose,la.status,la.created_at AS "createdAt",lp.name AS product,
-    u.first_name AS "firstName",u.last_name AS "lastName",u.email
+    la.loan_term AS term,la.purpose,la.purpose_category AS "purposeCategory",la.repayment_source AS "repaymentSource",
+    la.existing_monthly_debt AS "existingMonthlyDebt",la.affordability_ratio AS "affordabilityRatio",
+    la.monthly_payment AS "monthlyPayment",la.status,la.created_at AS "createdAt",lp.name AS product,
+    u.first_name AS "firstName",u.last_name AS "lastName",u.email,
+    EXTRACT(YEAR FROM age(CURRENT_DATE,u.date_of_birth))::int AS age,up.income_range AS "incomeRange",
+    up.employment_type AS "employmentType",COALESCE(k.verification_status,'NOT_SUBMITTED') AS "kycStatus"
     FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id JOIN users u ON u.id=la.user_id
+    LEFT JOIN user_profiles up ON up.user_id=u.id LEFT JOIN kyc_verifications k ON k.user_id=u.id
     WHERE la.status IN ('SUBMITTED','UNDER_REVIEW','APPROVED') ORDER BY la.created_at ASC LIMIT 200`);
       return res.json({ success: true, data: rows });
     } catch (error) {
@@ -668,14 +744,17 @@ router.patch(
       if (req.body.status === 'APPROVED') {
         const eligible = await query(
           `SELECT 1 FROM loan_applications la JOIN users u ON u.id=la.user_id
+           JOIN user_profiles up ON up.user_id=la.user_id AND up.profile_completed_at IS NOT NULL
            JOIN kyc_verifications k ON k.user_id=la.user_id AND k.verification_status='APPROVED'
-           WHERE la.id=$1 AND u.status='ACTIVE'`,
+           WHERE la.id=$1 AND u.status='ACTIVE' AND u.date_of_birth<=CURRENT_DATE-INTERVAL '18 years'
+           AND COALESCE(la.affordability_ratio,0)<=0.5 AND la.declaration_accepted=true`,
           [req.params.id],
         );
         if (!eligible.length)
           return res.status(409).json({
             success: false,
-            message: 'The customer must be active with approved KYC before loan approval',
+            message:
+              'Approval requires an adult active customer, completed profile, accepted declaration, affordable repayment and approved KYC',
           });
       }
       const row = (

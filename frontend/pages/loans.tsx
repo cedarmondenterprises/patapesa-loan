@@ -24,7 +24,11 @@ export default function Loans() {
     [step, setStep] = useState(1),
     [amount, setAmount] = useState(0),
     [term, setTerm] = useState(0),
+    [purposeCategory, setPurposeCategory] = useState(''),
     [purpose, setPurpose] = useState(''),
+    [repaymentSource, setRepaymentSource] = useState(''),
+    [existingMonthlyDebt, setExistingMonthlyDebt] = useState(0),
+    [declarationAccepted, setDeclarationAccepted] = useState(false),
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
     [loadingProducts, setLoadingProducts] = useState(true);
@@ -45,7 +49,11 @@ export default function Loans() {
     setSelected(p);
     setAmount(Number(p.minAmount));
     setTerm(p.minTerm);
+    setPurposeCategory('');
     setPurpose('');
+    setRepaymentSource('');
+    setExistingMonthlyDebt(0);
+    setDeclarationAccepted(false);
     setStep(1);
     setMessage('');
   }
@@ -61,7 +69,16 @@ export default function Loans() {
         '/loans/applications',
         {
           method: 'POST',
-          body: JSON.stringify({ productId: selected?.id, amount, term, purpose }),
+          body: JSON.stringify({
+            productId: selected?.id,
+            amount,
+            term,
+            purposeCategory,
+            purpose,
+            repaymentSource,
+            existingMonthlyDebt,
+            declarationAccepted,
+          }),
         },
       );
       setMessage(`${r.message}. Your reference is ${r.data.applicationNumber}.`);
@@ -194,15 +211,60 @@ export default function Loans() {
                   </small>
                 </label>
                 <label className="field">
+                  <span>Purpose category</span>
+                  <select
+                    value={purposeCategory}
+                    onChange={(e) => setPurposeCategory(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose a category</option>
+                    <option value="EMERGENCY">Emergency expense</option>
+                    <option value="MEDICAL">Medical expense</option>
+                    <option value="EDUCATION">Education</option>
+                    <option value="BUSINESS">Business</option>
+                    <option value="HOME">Home improvement</option>
+                    <option value="TRANSPORT">Transport</option>
+                    <option value="AGRICULTURE">Agriculture</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </label>
+                <label className="field">
                   <span>Purpose of the loan</span>
                   <textarea
-                    minLength={5}
+                    minLength={20}
                     maxLength={255}
                     value={purpose}
                     onChange={(e) => setPurpose(e.target.value)}
                     placeholder="Briefly explain what the funds will be used for"
                     required
                   />
+                  <small className="helper">Give enough detail for a responsible review.</small>
+                </label>
+                <label className="field">
+                  <span>How will you repay this loan?</span>
+                  <input
+                    minLength={3}
+                    maxLength={160}
+                    value={repaymentSource}
+                    onChange={(e) => setRepaymentSource(e.target.value)}
+                    placeholder="For example, monthly employment salary"
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Current monthly loan repayments</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="10000000"
+                    step="1"
+                    value={existingMonthlyDebt}
+                    onChange={(e) => setExistingMonthlyDebt(Number(e.target.value))}
+                    required
+                  />
+                  <small className="helper">
+                    Enter 0 if you have no other monthly loan payments.
+                  </small>
                 </label>
               </div>
             ) : (
@@ -213,6 +275,7 @@ export default function Loans() {
                     ['Estimated interest', kes(quote?.interest || 0)],
                     ['Processing fee', kes(quote?.fee || 0)],
                     ['Estimated monthly payment', kes(quote?.monthly || 0)],
+                    ['Existing monthly loan payments', kes(existingMonthlyDebt)],
                     ['Total repayment', kes(quote?.total || 0)],
                   ].map(([k, v]) => (
                     <div key={k} className="flex justify-between py-3 text-sm">
@@ -222,13 +285,29 @@ export default function Loans() {
                   ))}
                 </dl>
                 <div className="mt-6 bg-[#eee9df] p-4 text-sm leading-6">
-                  <strong>Purpose</strong>
+                  <strong>{purposeCategory.replace(/_/g, ' ')} purpose</strong>
                   <p className="mt-1 text-slate-600">{purpose}</p>
+                  <p className="mt-3 text-slate-600">
+                    <strong>Repayment source:</strong> {repaymentSource}
+                  </p>
                 </div>
                 <p className="mt-5 text-xs leading-5 text-slate-500">
                   Submitting does not guarantee approval. PataPesa will review your identity and
                   eligibility first.
                 </p>
+                <label className="mt-5 flex gap-3 text-sm leading-6 text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={declarationAccepted}
+                    onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                    required
+                    className="mt-1 h-4 w-4 accent-[#123c32]"
+                  />
+                  <span>
+                    I confirm that the amount, purpose, repayment source and existing debt
+                    information are complete and accurate.
+                  </span>
+                </label>
               </div>
             )}
             <div className="flex gap-3 border-t border-pata-900/10 px-7 py-5">

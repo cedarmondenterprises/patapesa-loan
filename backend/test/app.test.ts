@@ -40,7 +40,7 @@ describe('API security and authentication surface', () => {
     expect(response.status).toBe(403);
   });
 
-  it('creates a pending registration without authenticating it', async () => {
+  it('creates an active registration and starts an authenticated session', async () => {
     const clientQuery = jest
       .fn()
       .mockResolvedValueOnce({
@@ -94,10 +94,50 @@ describe('API security and authentication surface', () => {
       });
     expect(response.status).toBe(201);
     expect(response.body.data.token).toBeUndefined();
-    expect(response.headers['set-cookie']).toBeUndefined();
-    expect(response.body.message).toContain('administrator must approve');
+    expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
+    expect(response.body.message).toContain('account is active');
     expect(response.body.data.registrationReference).toMatch(/^PPR-/);
     expect(clientQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects registration when the date of birth is today', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const response = await request(app)
+      .post('/api/auth/register')
+      .set('Origin', 'http://localhost:3000')
+      .send({
+        firstName: 'Baby',
+        lastName: 'Applicant',
+        email: 'baby@example.com',
+        phone: '+254711111111',
+        dateOfBirth: today,
+        nationality: 'KEN',
+        addressLine1: '12 Market Road',
+        addressLine2: '',
+        city: 'Nairobi',
+        county: 'Nairobi',
+        postalCode: '00100',
+        employmentType: 'STUDENT',
+        occupation: 'Student',
+        employerName: '',
+        industry: 'Education',
+        yearsOfEmployment: 0,
+        incomeRange: 'BELOW_15000',
+        sourceOfIncome: 'Family support',
+        educationLevel: 'SECONDARY',
+        maritalStatus: 'SINGLE',
+        dependants: 0,
+        accuracyConfirmed: true,
+        privacyAcknowledged: true,
+        eligibilityAssessmentAcknowledged: true,
+        electronicCommunicationsConsent: true,
+        marketingConsent: false,
+        password: 'StrongPass1!',
+        remember: true,
+      });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('between 18 and 100');
+    expect(transactionMock).not.toHaveBeenCalled();
   });
 
   it('denies the staff queue when the authenticated user lacks permission', async () => {
@@ -110,6 +150,53 @@ describe('API security and authentication surface', () => {
       .get('/api/admin/applications')
       .set('Cookie', `patapesa_session=${token}`);
     expect(response.status).toBe(403);
+  });
+
+  it('submits an eligible loan application without requiring KYC first', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const token = createToken({ id, email: 'user@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([
+        { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2',
+          min_amount: '10000',
+          max_amount: '500000',
+          min_term: 3,
+          max_term: 24,
+          interest_rate: '15',
+          processing_fee: '2.5',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb',
+          applicationNumber: 'PPL-TEST',
+          status: 'SUBMITTED',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .post('/api/loans/applications')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        productId: '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2',
+        amount: 30000,
+        term: 12,
+        purposeCategory: 'BUSINESS',
+        purpose: 'Purchase additional stock for my retail shop',
+        repaymentSource: 'Monthly retail business income',
+        existingMonthlyDebt: 0,
+        declarationAccepted: true,
+      });
+    expect(response.status).toBe(201);
+    expect(response.body.data.status).toBe('SUBMITTED');
+    expect(queryMock.mock.calls[4][0]).toContain("'SUBMITTED'");
   });
 
   it('allows a permitted staff member to read the review queue', async () => {
@@ -150,6 +237,7 @@ describe('API security and authentication surface', () => {
       .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
       .mockResolvedValueOnce([{ allowed: 1 }])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ eligible: 1 }])
       .mockResolvedValueOnce([{ id: customerId, status: 'ACTIVE' }])
       .mockResolvedValueOnce([]);
     const response = await request(app)
@@ -159,6 +247,6 @@ describe('API security and authentication surface', () => {
       .send({ status: 'ACTIVE' });
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('ACTIVE');
-    expect(queryMock.mock.calls[4][0]).toContain('INSERT INTO audit_logs');
+    expect(queryMock.mock.calls[5][0]).toContain('INSERT INTO audit_logs');
   });
 });

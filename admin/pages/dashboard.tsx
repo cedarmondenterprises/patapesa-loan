@@ -78,6 +78,8 @@ export default function Dashboard() {
   }
   useEffect(() => {
     void load();
+    const refresh = window.setInterval(() => void load(), 15_000);
+    return () => window.clearInterval(refresh);
   }, []);
   async function act(path: string, method: string, body: Row = {}, success = 'Action completed') {
     try {
@@ -105,7 +107,7 @@ export default function Dashboard() {
     );
   }, [users, query]);
   const counts: Record<string, number> = {
-    Registrations: users.filter((u) => u.status === 'PENDING').length,
+    Registrations: users.filter((u) => u.registrationReference).length,
     'Loan review': apps.length,
     'KYC review': kyc.length,
     Support: support.filter((s) => ['OPEN', 'IN_PROGRESS'].includes(String(s.status))).length,
@@ -195,19 +197,16 @@ export default function Dashboard() {
             {tab === 'Overview' && <Overview metrics={metrics} audit={audit} />}
             {tab === 'Registrations' && (
               <>
-                <Toolbar
-                  value={query}
-                  setValue={setQuery}
-                  placeholder="Search pending registrations"
-                />
+                <Toolbar value={query} setValue={setQuery} placeholder="Search registrations" />
                 <Table
-                  heads={['Customer', 'Reference', 'Registered', 'Application', 'Decision']}
+                  heads={['Customer', 'Reference', 'Registered', 'Account', 'Record']}
                   rows={filtered
-                    .filter((u) => u.status === 'PENDING')
+                    .filter((u) => u.registrationReference)
                     .map((u) => [
                       <Person row={u} key="p" />,
                       u.registrationReference || 'Legacy registration',
                       date(u.createdAt),
+                      <Status value={u.status} key="status" />,
                       u.registrationReference ? (
                         <div className="actions" key="pdf">
                           <button onClick={() => openRegistrationPdf(u.id)}>
@@ -217,47 +216,6 @@ export default function Dashboard() {
                       ) : (
                         'Not available'
                       ),
-                      <div className="actions" key="a">
-                        <button
-                          className="approve"
-                          onClick={() =>
-                            ask({
-                              title: 'Approve this registration?',
-                              copy: `${u.firstName} ${u.lastName} will be able to sign in and continue identity verification.`,
-                              label: 'Approve account',
-                              run: () =>
-                                act(
-                                  `/admin/users/${u.id}/status`,
-                                  'PATCH',
-                                  { status: 'ACTIVE' },
-                                  'Registration approved',
-                                ),
-                            })
-                          }
-                        >
-                          Approve
-                        </button>
-                        <button
-                          className="danger"
-                          onClick={() =>
-                            ask({
-                              title: 'Reject this registration?',
-                              copy: 'The customer will not be able to sign in. This decision is recorded in the audit log.',
-                              label: 'Reject account',
-                              danger: true,
-                              run: () =>
-                                act(
-                                  `/admin/users/${u.id}/status`,
-                                  'PATCH',
-                                  { status: 'REJECTED' },
-                                  'Registration rejected',
-                                ),
-                            })
-                          }
-                        >
-                          Reject
-                        </button>
-                      </div>,
                     ])}
                 />
               </>
@@ -329,11 +287,12 @@ export default function Dashboard() {
             )}
             {tab === 'Loan review' && (
               <Table
-                heads={['Reference', 'Customer', 'Request', 'Status', 'Decision']}
+                heads={['Reference', 'Customer', 'Request', 'Eligibility', 'Status', 'Decision']}
                 rows={apps.map((a) => [
                   a.applicationNumber,
                   <Person row={a} key="p" />,
-                  `${a.product}\n${money(a.amount)} · ${a.term} months\n${a.purpose}`,
+                  `${a.product} · ${String(a.purposeCategory || 'OTHER').replaceAll('_', ' ')}\n${money(a.amount)} · ${a.term} months · ${money(a.monthlyPayment)}/month\n${a.purpose}\nRepayment: ${a.repaymentSource || 'Legacy record'}`,
+                  `Age: ${a.age ?? 'Missing'}\nIncome: ${String(a.incomeRange || 'Missing').replaceAll('_', ' ')}\nExisting debt: ${money(a.existingMonthlyDebt)}\nCommitment ratio: ${(Number(a.affordabilityRatio || 0) * 100).toFixed(1)}%\nKYC: ${String(a.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}`,
                   <Status value={a.status} key="s" />,
                   <div className="actions" key="d">
                     {a.status !== 'APPROVED' ? (
@@ -564,7 +523,7 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
       <div className="cards">
         {[
           ['Active users', metrics.activeUsers],
-          ['Pending registrations', metrics.pendingRegistrations],
+          ['Registrations · 7 days', metrics.recentRegistrations],
           ['Applications to review', metrics.pendingApplications],
           ['KYC to review', metrics.pendingKyc],
           ['Total disbursed', money(metrics.totalDisbursed)],

@@ -1,5 +1,6 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import AuthShell from '../components/AuthShell';
 import { api } from '../lib/api';
 
@@ -94,6 +95,7 @@ const choiceLabel = (options: string[][], selected: string) =>
   options.find(([value]) => value === selected)?.[1] || selected || 'Not provided';
 
 export default function Register() {
+  const router = useRouter();
   const [form, setForm] = useState(initial);
   const [step, setStep] = useState(0);
   const [message, setMessage] = useState('');
@@ -152,6 +154,7 @@ export default function Register() {
       setMessage(result.message);
       setReference(result.data.registrationReference);
       setSubmitted(true);
+      await router.push('/dashboard');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Registration failed');
     } finally {
@@ -172,10 +175,8 @@ export default function Register() {
           <div className="mb-6 flex h-12 w-12 items-center justify-center bg-[#e7f4eb] text-2xl text-[#19704b]">
             ✓
           </div>
-          <p className="eyebrow">Registration received</p>
-          <h2 className="mt-3 text-3xl font-bold text-pata-950">
-            Your application is ready for review.
-          </h2>
+          <p className="eyebrow">Registration complete</p>
+          <h2 className="mt-3 text-3xl font-bold text-pata-950">Your account is active.</h2>
           <p className="mt-4 leading-7 text-slate-600">{message}</p>
           <div className="mt-6 border border-slate-200 bg-[#f7f4ec] p-5">
             <span className="text-xs font-bold uppercase tracking-[.12em] text-slate-500">
@@ -183,12 +184,11 @@ export default function Register() {
             </span>
             <strong className="mt-2 block font-mono text-lg text-pata-900">{reference}</strong>
             <p className="mb-0 mt-2 text-sm leading-6 text-slate-600">
-              Keep this reference. Staff can use it to locate the exact registration record you
-              submitted.
+              Keep this reference. Staff can use it to locate your original registration record.
             </p>
           </div>
-          <Link href="/login" className="button button-primary mt-7 w-full">
-            Return to sign in
+          <Link href="/dashboard" className="button button-primary mt-7 w-full">
+            Continue to my account
           </Link>
         </div>
       ) : (
