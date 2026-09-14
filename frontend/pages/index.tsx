@@ -32,7 +32,7 @@ const productDefaults: QuoteProduct[] = [
   {
     id: 'emergency',
     name: 'Emergency',
-    use: 'For an urgent, short-term expense',
+    use: 'For urgent, short-term expenses',
     min: 1000,
     max: 50000,
     minTerm: 1,
@@ -54,7 +54,7 @@ const productDefaults: QuoteProduct[] = [
   {
     id: 'business',
     name: 'Business',
-    use: 'For stock, tools and business cash flow',
+    use: 'For stock, tools and working capital',
     min: 50000,
     max: 1000000,
     minTerm: 6,
@@ -98,9 +98,7 @@ export default function Home() {
           })),
         );
       })
-      .catch(() => {
-        // The safe defaults keep the estimator useful if the API is temporarily unavailable.
-      });
+      .catch(() => undefined);
   }, []);
 
   function chooseProduct(id: string) {
@@ -117,272 +115,226 @@ export default function Home() {
     return { interest, fee, total, monthly: total / months };
   }, [amount, months, product]);
 
+  const overallMin = Math.min(...products.map((item) => item.min));
+  const overallMax = Math.max(...products.map((item) => item.max));
+
   return (
     <Layout
-      title="PataPesa | Clear loan applications in Kenya"
-      description="Choose a loan, see the estimated full cost and apply securely from one PataPesa account."
+      title="PataPesa | Plan clearly. Apply confidently."
+      description="Explore transparent loan estimates, apply securely and track every step from one PataPesa account."
     >
-      <section className="welcome-block">
-        <div className="welcome-copy">
-          <p className="context-label">Personal, emergency and business loans</p>
-          <h1>Know the cost before you apply.</h1>
-          <p>
-            Choose an amount and repayment period to see a clear estimate. If it works for your
-            budget, continue with one secure application.
+      <section className="money-hero">
+        <div className="money-hero-copy">
+          <p className="context-label">Built for everyday financial decisions</p>
+          <h1>Money for the next step, with the cost shown first.</h1>
+          <p className="money-hero-lead">
+            Choose what you need, see an honest repayment estimate and continue only when the
+            numbers make sense for you.
           </p>
-          <div className="welcome-actions">
-            <a href="#loan-planner" className="button button-primary">
-              Get an estimate
+          <div className="money-hero-actions">
+            <a href="#quick-estimate" className="button button-primary">
+              Check my estimate
             </a>
-            <Link href="/login" className="button button-secondary">
-              Sign in to your account
+            <Link href="/login" className="quiet-action">
+              I already have an account <span aria-hidden="true">→</span>
             </Link>
           </div>
-        </div>
-        <aside className="start-check" aria-label="What you need to apply">
-          <p className="start-check-title">Before you start</p>
-          <ul>
-            <li>
-              <span>1</span>
-              <p>
-                <strong>Be 18 or older</strong>
-                <small>Your date of birth is checked during registration.</small>
-              </p>
-            </li>
-            <li>
-              <span>2</span>
-              <p>
-                <strong>Have a Kenyan mobile number</strong>
-                <small>We use it to keep your account and application connected.</small>
-              </p>
-            </li>
-            <li>
-              <span>3</span>
-              <p>
-                <strong>Know your income and expenses</strong>
-                <small>This helps us assess whether repayments are affordable.</small>
-              </p>
-            </li>
+          <ul className="confidence-list" aria-label="PataPesa application benefits">
+            <li><span aria-hidden="true">✓</span> Full estimated cost before submission</li>
+            <li><span aria-hidden="true">✓</span> Progress saved while you complete forms</li>
+            <li><span aria-hidden="true">✓</span> One dashboard for decisions and repayments</li>
           </ul>
+        </div>
+
+        <aside id="quick-estimate" className="quick-estimate" aria-labelledby="estimate-title">
+          <div className="estimate-topline">
+            <div>
+              <p className="context-label">Quick estimate</p>
+              <h2 id="estimate-title">Plan your loan</h2>
+            </div>
+            <span className="estimate-step">No sign-in needed</span>
+          </div>
+
+          <div className="estimate-products" role="group" aria-label="Loan type">
+            {products.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={item.id === productId ? 'active' : ''}
+                aria-pressed={item.id === productId}
+                onClick={() => chooseProduct(item.id)}
+              >
+                {item.name}
+              </button>
+            ))}
+          </div>
+
+          <label className="estimate-control">
+            <span>
+              <small>How much do you need?</small>
+              <output>{money(amount)}</output>
+            </span>
+            <input
+              aria-label="Loan amount"
+              type="range"
+              min={product.min}
+              max={product.max}
+              step={product.id === 'emergency' ? 1000 : 5000}
+              value={amount}
+              onChange={(event) => setAmount(Number(event.target.value))}
+            />
+            <small className="range-limits">
+              <span>{money(product.min)}</span>
+              <span>{money(product.max)}</span>
+            </small>
+          </label>
+
+          <label className="estimate-control">
+            <span>
+              <small>Repayment period</small>
+              <output>{months} months</output>
+            </span>
+            <input
+              aria-label="Repayment period"
+              type="range"
+              min={product.minTerm}
+              max={product.maxTerm}
+              value={months}
+              onChange={(event) => setMonths(Number(event.target.value))}
+            />
+            <small className="range-limits">
+              <span>{product.minTerm} month{product.minTerm === 1 ? '' : 's'}</span>
+              <span>{product.maxTerm} months</span>
+            </small>
+          </label>
+
+          <div className="estimate-result" aria-live="polite">
+            <div>
+              <small>Estimated monthly repayment</small>
+              <strong>{money(quote.monthly)}</strong>
+            </div>
+            <dl>
+              <div><dt>Interest</dt><dd>{money(quote.interest)}</dd></div>
+              <div><dt>Processing fee</dt><dd>{money(quote.fee)}</dd></div>
+              <div><dt>Total repayment</dt><dd>{money(quote.total)}</dd></div>
+            </dl>
+          </div>
+
+          <Link href="/register" className="button button-primary estimate-cta">
+            Continue with this plan
+          </Link>
+          <p className="estimate-disclaimer">
+            Estimate only. Approval and final terms depend on identity, eligibility and
+            affordability checks.
+          </p>
         </aside>
       </section>
 
-      <section id="loan-planner" className="loan-planner" aria-labelledby="planner-title">
-        <div className="planner-heading">
-          <div>
-            <p className="context-label">Loan estimate</p>
-            <h2 id="planner-title">What are you borrowing for?</h2>
-          </div>
-          <p>Change the figures below. This estimate is not a loan offer or approval.</p>
-        </div>
-
-        <div className="product-tabs" role="group" aria-label="Loan type">
-          {products.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={item.id === productId ? 'selected' : ''}
-              aria-pressed={item.id === productId}
-              onClick={() => chooseProduct(item.id)}
-            >
-              <strong>{item.name}</strong>
-              <span>{item.use}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="planner-workspace">
-          <div className="planner-controls">
-            <label className="planner-control">
-              <span>
-                <strong>Amount needed</strong>
-                <output>{money(amount)}</output>
-              </span>
-              <input
-                aria-label="Amount needed"
-                type="range"
-                min={product.min}
-                max={product.max}
-                step={product.id === 'emergency' ? 1000 : 5000}
-                value={amount}
-                onChange={(event) => setAmount(Number(event.target.value))}
-              />
-              <small>
-                <span>{money(product.min)}</span>
-                <span>{money(product.max)}</span>
-              </small>
-            </label>
-            <label className="planner-control">
-              <span>
-                <strong>Repayment period</strong>
-                <output>{months} months</output>
-              </span>
-              <input
-                aria-label="Repayment period"
-                type="range"
-                min={product.minTerm}
-                max={product.maxTerm}
-                value={months}
-                onChange={(event) => setMonths(Number(event.target.value))}
-              />
-              <small>
-                <span>
-                  {product.minTerm} month{product.minTerm === 1 ? '' : 's'}
-                </span>
-                <span>{product.maxTerm} months</span>
-              </small>
-            </label>
-            <div className="planner-guidance">
-              <strong>Keep repayments comfortable.</strong>
-              <p>
-                Include rent, food, transport and existing debt when deciding what you can repay
-                each month.
-              </p>
-            </div>
-          </div>
-
-          <aside className="quote-summary" aria-live="polite">
-            <p>Your estimated repayment</p>
-            <div className="monthly-figure">
-              <strong>{money(quote.monthly)}</strong>
-              <span>per month</span>
-            </div>
-            <dl>
-              <div>
-                <dt>Amount borrowed</dt>
-                <dd>{money(amount)}</dd>
-              </div>
-              <div>
-                <dt>Estimated interest ({product.rate}% p.a.)</dt>
-                <dd>{money(quote.interest)}</dd>
-              </div>
-              <div>
-                <dt>Processing fee ({product.fee}%)</dt>
-                <dd>{money(quote.fee)}</dd>
-              </div>
-              <div className="total-line">
-                <dt>Total estimated repayment</dt>
-                <dd>{money(quote.total)}</dd>
-              </div>
-            </dl>
-            <Link href="/register" className="button button-primary">
-              Continue to application
-            </Link>
-            <Link href="/loans" className="quote-details-link">
-              See full product details
-            </Link>
-          </aside>
-        </div>
+      <section className="proof-rail" aria-label="PataPesa overview">
+        <div><strong>{products.length}</strong><span>loan options</span></div>
+        <div><strong>{money(overallMin)}–{money(overallMax).replace('KES ', '')}</strong><span>available range</span></div>
+        <div><strong>100% online</strong><span>application journey</span></div>
+        <div><strong>One account</strong><span>from application to repayment</span></div>
       </section>
 
       <AdSlot slot="HOME_BELOW_PLANNER" />
 
-      <section className="comparison-section" aria-labelledby="comparison-title">
-        <div className="section-copy">
-          <p className="context-label">Compare your options</p>
-          <h2 id="comparison-title">The important numbers, together.</h2>
+      <section className="journey-section" aria-labelledby="journey-title">
+        <div className="journey-heading">
+          <p className="context-label">A shorter path to an answer</p>
+          <h2 id="journey-title">Four clear steps. No guessing what comes next.</h2>
           <p>
-            Limits and rates vary by product. Eligibility and affordability checks apply to every
-            application.
+            Each stage explains why information is needed, saves your progress and leaves you with
+            a reference you can track.
           </p>
         </div>
-        <div className="comparison-table-wrap">
-          <table className="comparison-table">
-            <thead>
-              <tr>
-                <th>Loan</th>
-                <th>Amount</th>
-                <th>Period</th>
-                <th>Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((item) => (
-                <tr key={item.id}>
-                  <th scope="row">
-                    <strong>{item.name}</strong>
-                    <span>{item.use}</span>
-                  </th>
-                  <td>
-                    {money(item.min)}–{money(item.max).replace('KES ', '')}
-                  </td>
-                  <td>
-                    {item.minTerm}–{item.maxTerm} months
-                  </td>
-                  <td>
-                    {item.rate}% p.a.<small>{item.fee}% processing fee</small>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="application-guide" aria-labelledby="guide-title">
-        <div className="guide-intro">
-          <p className="context-label">A clear application</p>
-          <h2 id="guide-title">You can see what happens next.</h2>
-          <p>
-            We ask for the information needed to assess an application. Your dashboard keeps the
-            current status and next action in one place.
-          </p>
-          <Link href="/faq" className="inline-link">
-            Read common questions
-          </Link>
-        </div>
-        <ol className="decision-steps">
+        <ol className="journey-grid">
           <li>
             <span>01</span>
-            <div>
-              <strong>Create your profile</strong>
-              <p>
-                Add your identity, work, education and income information. Your progress is saved in
-                this browser while you complete the form.
-              </p>
-            </div>
+            <h3>Plan</h3>
+            <p>Choose an amount and term, then review the estimated total cost.</p>
           </li>
           <li>
             <span>02</span>
-            <div>
-              <strong>Submit your identity check</strong>
-              <p>A verified identity is required before an application can be approved.</p>
-            </div>
+            <h3>Create your profile</h3>
+            <p>Tell us about your identity, work, income and household circumstances.</p>
           </li>
           <li>
             <span>03</span>
-            <div>
-              <strong>Send one complete application</strong>
-              <p>
-                Choose the amount, period, purpose and repayment source, then review everything
-                before submission.
-              </p>
-            </div>
+            <h3>Apply</h3>
+            <p>Confirm the purpose, repayment source and existing monthly commitments.</p>
           </li>
           <li>
             <span>04</span>
-            <div>
-              <strong>Follow the decision</strong>
-              <p>See your reference number and application status from your customer dashboard.</p>
-            </div>
+            <h3>Track</h3>
+            <p>Follow the review, decision, balance and repayment schedule from your dashboard.</p>
           </li>
         </ol>
       </section>
 
-      <section className="help-strip">
-        <div>
-          <p className="context-label">Need an answer first?</p>
-          <h2>Borrowing should not begin with a guess.</h2>
+      <section className="control-section">
+        <div className="control-card control-card-dark">
+          <p className="context-label">Your account</p>
+          <h2>The important information stays together.</h2>
+          <p>
+            See your latest application, identity-check status, upcoming repayment and confirmed
+            payment history without searching through messages.
+          </p>
+          <Link href="/login" className="button button-light">Open my dashboard</Link>
         </div>
-        <div className="help-actions">
-          <Link href="/faq" className="button button-secondary">
-            Read the FAQs
-          </Link>
-          <Link href="/contact" className="inline-link">
-            Contact support
-          </Link>
+        <div className="control-card">
+          <p className="context-label">Before you apply</p>
+          <h2>Make sure the repayment fits ordinary life.</h2>
+          <ul className="eligibility-list">
+            <li><span>1</span><div><strong>Be at least 18</strong><small>Your date of birth is validated.</small></div></li>
+            <li><span>2</span><div><strong>Use a Kenyan mobile number</strong><small>Keep your application connected to you.</small></div></li>
+            <li><span>3</span><div><strong>Share accurate income and debt</strong><small>Used for a responsible affordability review.</small></div></li>
+          </ul>
         </div>
       </section>
+
+      <section className="product-section" aria-labelledby="products-title">
+        <div className="product-section-heading">
+          <div>
+            <p className="context-label">Choose by purpose</p>
+            <h2 id="products-title">A product that matches the job.</h2>
+          </div>
+          <Link href="/loans" className="quiet-action">Compare every detail <span>→</span></Link>
+        </div>
+        <div className="product-card-grid">
+          {products.map((item, index) => (
+            <article key={item.id} className="purpose-card">
+              <span className="purpose-index">0{index + 1}</span>
+              <h3>{item.name}</h3>
+              <p>{item.use}</p>
+              <dl>
+                <div><dt>Amount</dt><dd>{money(item.min)}–{money(item.max).replace('KES ', '')}</dd></div>
+                <div><dt>Term</dt><dd>{item.minTerm}–{item.maxTerm} months</dd></div>
+                <div><dt>Rate</dt><dd>{item.rate}% p.a.</dd></div>
+              </dl>
+              <button type="button" onClick={() => { chooseProduct(item.id); document.getElementById('quick-estimate')?.scrollIntoView(); }}>
+                Estimate this loan <span aria-hidden="true">→</span>
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="home-help">
+        <div>
+          <p className="context-label">Questions are part of a good decision</p>
+          <h2>Understand the process before sharing your details.</h2>
+        </div>
+        <div>
+          <Link href="/faq" className="button button-primary">Read common questions</Link>
+          <Link href="/contact" className="quiet-action">Contact support <span>→</span></Link>
+        </div>
+      </section>
+
+      <div className="mobile-apply-bar">
+        <div><small>Ready to begin?</small><strong>Start securely online</strong></div>
+        <Link href="/register" className="button button-primary button-small">Apply now</Link>
+      </div>
     </Layout>
   );
 }
