@@ -513,6 +513,21 @@ CREATE TABLE IF NOT EXISTS ad_placements (
 CREATE INDEX IF NOT EXISTS idx_ad_placements_active
 ON ad_placements(slot, enabled, starts_at, ends_at);
 
+-- Allowlisted analytics and advertising providers. Raw scripts are never stored.
+CREATE TABLE IF NOT EXISTS site_integrations (
+    provider VARCHAR(40) PRIMARY KEY CHECK (
+        provider IN ('GOOGLE_ANALYTICS', 'GOOGLE_TAG_MANAGER', 'PLAUSIBLE', 'GOOGLE_ADSENSE')
+    ),
+    public_id VARCHAR(255) NOT NULL,
+    home_slot VARCHAR(30),
+    loans_slot VARCHAR(30),
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    created_by UUID REFERENCES users(id),
+    updated_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Admin users (roles and permissions)
 CREATE TABLE IF NOT EXISTS admin_roles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

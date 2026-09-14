@@ -17,7 +17,7 @@ type Dialog = {
 const groups = [
   { label: 'Workspace', items: ['Overview', 'Registrations', 'Users & roles'] },
   { label: 'Lending', items: ['Loan review', 'KYC review', 'Loan ledger'] },
-  { label: 'Operations', items: ['Support', 'Advertising', 'Audit'] },
+  { label: 'Operations', items: ['Support', 'Tracking & ads', 'Audit'] },
 ];
 const permissionFor: Record<string, string> = {
   Overview: 'dashboard:view',
@@ -27,7 +27,7 @@ const permissionFor: Record<string, string> = {
   'KYC review': 'kyc:review',
   'Loan ledger': 'ledger:view',
   Support: 'support:manage',
-  Advertising: 'ads:manage',
+  'Tracking & ads': 'ads:manage',
   Audit: 'audit:view',
 };
 const money = (v: unknown) => `KES ${Number(v || 0).toLocaleString('en-KE')}`;
@@ -46,6 +46,7 @@ export default function Dashboard() {
     [ledger, setLedger] = useState<Row[]>([]),
     [support, setSupport] = useState<Row[]>([]),
     [ads, setAds] = useState<Row[]>([]),
+    [integrations, setIntegrations] = useState<Row[]>([]),
     [audit, setAudit] = useState<Row[]>([]),
     [roles, setRoles] = useState<string[]>([]),
     [permissions, setPermissions] = useState<string[]>([]),
@@ -80,15 +81,17 @@ export default function Dashboard() {
       if (a) setApps(a as Row[]);
       if (k) setKyc(k as Row[]);
       if (!background) {
-        const [l, s, ad, au] = await Promise.all([
+        const [l, s, ad, integrationsData, au] = await Promise.all([
           allowed('ledger:view') ? safe('/admin/ledger') : null,
           allowed('support:manage') ? safe('/admin/support') : null,
           allowed('ads:manage') ? safe('/admin/ads') : null,
+          allowed('ads:manage') ? safe('/admin/integrations') : null,
           allowed('audit:view') ? safe('/admin/audit') : null,
         ]);
         if (l) setLedger(l as Row[]);
         if (s) setSupport(s as Row[]);
         if (ad) setAds(ad as Row[]);
+        if (integrationsData) setIntegrations(integrationsData as Row[]);
         if (au) setAudit(au as Row[]);
       }
       setLastSync(new Date());
@@ -593,11 +596,20 @@ export default function Dashboard() {
                 ])}
               />
             )}
-            {tab === 'Advertising' && (
+            {tab === 'Tracking & ads' && (
               <AdManager
                 ads={ads}
+                integrations={integrations}
                 save={(slot, body) =>
                   act(`/admin/ads/${slot}`, 'PUT', body, 'Advertising placement saved')
+                }
+                saveIntegration={(provider, body) =>
+                  act(
+                    `/admin/integrations/${provider}`,
+                    'PUT',
+                    body,
+                    'Tracking or advertising integration saved',
+                  )
                 }
               />
             )}
@@ -692,11 +704,41 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
 }
 function AdManager({
   ads,
+  integrations,
   save,
+  saveIntegration,
 }: {
   ads: Row[];
+  integrations: Row[];
   save: (slot: string, body: Row) => Promise<void>;
+  saveIntegration: (provider: string, body: Row) => Promise<void>;
 }) {
+  const providers = [
+    {
+      id: 'GOOGLE_ANALYTICS',
+      name: 'Google Analytics 4',
+      hint: 'Measurement ID (G-…) or the standard Google tag snippet',
+      placeholder: 'G-XXXXXXXXXX',
+    },
+    {
+      id: 'GOOGLE_TAG_MANAGER',
+      name: 'Google Tag Manager',
+      hint: 'Container ID (GTM-…) or the standard container snippet',
+      placeholder: 'GTM-XXXXXXX',
+    },
+    {
+      id: 'PLAUSIBLE',
+      name: 'Plausible Analytics',
+      hint: 'Tracked domain or the standard Plausible snippet',
+      placeholder: 'cedarmondtv.site',
+    },
+    {
+      id: 'GOOGLE_ADSENSE',
+      name: 'Google AdSense',
+      hint: 'Publisher ID (ca-pub-…) or the standard AdSense snippet',
+      placeholder: 'ca-pub-0000000000000000',
+    },
+  ];
   const slots = [
     {
       id: 'HOME_BELOW_PLANNER',
@@ -718,11 +760,110 @@ function AdManager({
   return (
     <div className="ad-admin-grid">
       <div className="ad-admin-intro">
-        <p className="overline">First-party placements</p>
-        <h2>Advertising controls</h2>
+        <p className="overline">Consent-aware integrations</p>
+        <h2>Tracking &amp; advertising</h2>
         <p>
-          Ads are off until you complete a placement and enable it. PataPesa does not inject
-          third-party ad scripts or trackers.
+          Paste a provider ID or its standard snippet. PataPesa extracts only the verified ID;
+          arbitrary JavaScript is rejected and nothing loads before the visitor gives consent.
+        </p>
+        <div className="integration-warning">
+          Use GA4 directly or through Tag Manager—not both for the same page view. Publishing
+          misleading, discriminatory or unlicensed financial advertising is prohibited.
+        </div>
+      </div>
+      <section className="integration-section">
+        <div className="integration-heading">
+          <p className="overline">Provider connections</p>
+          <h3>Analytics and ad networks</h3>
+        </div>
+        <div className="integration-grid">
+          {providers.map((provider) => {
+            const integration = integrations.find((item) => item.provider === provider.id);
+            return (
+              <form
+                className="integration-card"
+                key={`${provider.id}-${integration?.updatedAt || 'new'}`}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const data = new FormData(event.currentTarget);
+                  void saveIntegration(provider.id, {
+                    value: String(data.get('value') || ''),
+                    homeSlot: String(data.get('homeSlot') || ''),
+                    loansSlot: String(data.get('loansSlot') || ''),
+                    enabled: data.get('enabled') === 'on',
+                  });
+                }}
+              >
+                <div className="ad-editor-head">
+                  <div>
+                    <h3>{provider.name}</h3>
+                    <small>{provider.hint}</small>
+                  </div>
+                  <label className="ad-switch">
+                    <input
+                      name="enabled"
+                      type="checkbox"
+                      defaultChecked={integration?.enabled === true}
+                    />
+                    <span>Enabled</span>
+                  </label>
+                </div>
+                <label className="integration-value">
+                  <span>Provider ID or standard snippet</span>
+                  <textarea
+                    name="value"
+                    required
+                    maxLength={10000}
+                    defaultValue={String(integration?.publicId || '')}
+                    placeholder={provider.placeholder}
+                    spellCheck={false}
+                  />
+                </label>
+                {provider.id === 'GOOGLE_ADSENSE' && (
+                  <div className="ad-form-grid compact">
+                    <label>
+                      <span>Homepage ad slot ID</span>
+                      <input
+                        name="homeSlot"
+                        inputMode="numeric"
+                        pattern="[0-9]{5,20}"
+                        defaultValue={String(integration?.homeSlot || '')}
+                        placeholder="1234567890"
+                      />
+                    </label>
+                    <label>
+                      <span>Loans page ad slot ID</span>
+                      <input
+                        name="loansSlot"
+                        inputMode="numeric"
+                        pattern="[0-9]{5,20}"
+                        defaultValue={String(integration?.loansSlot || '')}
+                        placeholder="0987654321"
+                      />
+                    </label>
+                  </div>
+                )}
+                <div className="ad-editor-actions">
+                  <small>
+                    {integration?.updatedAt
+                      ? `Last saved ${date(integration.updatedAt)}`
+                      : 'Not configured'}
+                  </small>
+                  <button className="primary" type="submit">
+                    Save integration
+                  </button>
+                </div>
+              </form>
+            );
+          })}
+        </div>
+      </section>
+      <div className="ad-admin-intro placement-intro">
+        <p className="overline">Direct campaigns</p>
+        <h2>First-party placements</h2>
+        <p>
+          Publish approved sponsor creative without a third-party network. A direct campaign takes
+          priority over AdSense in the same placement.
         </p>
       </div>
       {slots.map((slot) => {
@@ -760,72 +901,38 @@ function AdManager({
             <div className="ad-form-grid">
               <label>
                 <span>Sponsor name</span>
-                <input
-                  name="sponsor"
-                  required
-                  minLength={2}
-                  maxLength={120}
-                  defaultValue={String(ad?.sponsor || '')}
-                  placeholder="Business or campaign name"
-                />
+                <input name="sponsor" required minLength={2} maxLength={120}
+                  defaultValue={String(ad?.sponsor || '')} placeholder="Business or campaign name" />
               </label>
               <label>
                 <span>Button label</span>
-                <input
-                  name="ctaLabel"
-                  required
-                  minLength={2}
-                  maxLength={60}
-                  defaultValue={String(ad?.ctaLabel || '')}
-                  placeholder="Learn more"
-                />
+                <input name="ctaLabel" required minLength={2} maxLength={60}
+                  defaultValue={String(ad?.ctaLabel || '')} placeholder="Learn more" />
               </label>
               <label className="span-2">
                 <span>Headline</span>
-                <input
-                  name="headline"
-                  required
-                  minLength={3}
-                  maxLength={160}
-                  defaultValue={String(ad?.headline || '')}
-                  placeholder="Short, factual headline"
-                />
+                <input name="headline" required minLength={3} maxLength={160}
+                  defaultValue={String(ad?.headline || '')} placeholder="Short, factual headline" />
               </label>
               <label className="span-2">
                 <span>Description</span>
-                <textarea
-                  name="body"
-                  required
-                  minLength={5}
-                  maxLength={500}
+                <textarea name="body" required minLength={5} maxLength={500}
                   defaultValue={String(ad?.body || '')}
-                  placeholder="Explain the offer without misleading claims"
-                />
+                  placeholder="Explain the offer without misleading claims" />
               </label>
               <label className="span-2">
                 <span>Destination URL</span>
-                <input
-                  name="targetUrl"
-                  required
-                  defaultValue={String(ad?.targetUrl || '')}
-                  placeholder="https://example.com/offer"
-                />
+                <input name="targetUrl" required defaultValue={String(ad?.targetUrl || '')}
+                  placeholder="https://example.com/offer" />
               </label>
               <label className="span-2">
                 <span>Image URL (optional)</span>
-                <input
-                  name="imageUrl"
-                  defaultValue={String(ad?.imageUrl || '')}
-                  placeholder="HTTPS image URL or /images/banner.jpg"
-                />
+                <input name="imageUrl" defaultValue={String(ad?.imageUrl || '')}
+                  placeholder="HTTPS image URL or /images/banner.jpg" />
               </label>
               <label>
                 <span>Starts (optional)</span>
-                <input
-                  name="startsAt"
-                  type="datetime-local"
-                  defaultValue={inputDate(ad?.startsAt)}
-                />
+                <input name="startsAt" type="datetime-local" defaultValue={inputDate(ad?.startsAt)} />
               </label>
               <label>
                 <span>Ends (optional)</span>
@@ -834,9 +941,7 @@ function AdManager({
             </div>
             <div className="ad-editor-actions">
               <small>{ad?.updatedAt ? `Last saved ${date(ad.updatedAt)}` : 'Not configured'}</small>
-              <button className="primary" type="submit">
-                Save placement
-              </button>
+              <button className="primary" type="submit">Save placement</button>
             </div>
           </form>
         );
@@ -854,7 +959,7 @@ function NavIcon({ name }: { name: string }) {
     'KYC review': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10M9 12l2 2 4-5',
     'Loan ledger': 'M4 3h16v18H4zM8 7h8M8 11h8M8 15h3M14 15h2',
     Support: 'M21 15a4 4 0 0 1-4 4H8l-5 3v-7a7 7 0 0 1-1-4 9 9 0 0 1 9-9h1a9 9 0 0 1 9 9z',
-    Advertising: 'M3 11v2l12 5V6L3 11zM15 9h4l2 2v2l-2 2h-4M6 14l2 7h4l-2-5',
+    'Tracking & ads': 'M3 11v2l12 5V6L3 11zM15 9h4l2 2v2l-2 2h-4M6 14l2 7h4l-2-5',
     Audit: 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2M17 3h4v4',
   };
   return (

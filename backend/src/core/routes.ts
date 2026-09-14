@@ -566,6 +566,19 @@ router.get('/products', async (_req, res, next) => {
   }
 });
 
+router.get('/integrations', async (_req, res, next) => {
+  try {
+    const rows = await query(
+      `SELECT provider,public_id AS "publicId",home_slot AS "homeSlot",
+       loans_slot AS "loansSlot" FROM site_integrations WHERE enabled=true ORDER BY provider`,
+    );
+    res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=900');
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/ads', async (req, res, next) => {
   try {
     const slot = String(req.query.slot || '').toUpperCase();

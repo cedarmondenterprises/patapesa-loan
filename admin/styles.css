@@ -915,3 +915,70 @@ tbody tr:last-child td {
     background: #fff;
   }
 }
+
+.integration-warning {
+  margin-top: 18px;
+  padding: 13px 15px;
+  color: #6b4d12;
+  background: #fff8e6;
+  border-left: 3px solid #d99a24;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.integration-section {
+  grid-column: 1 / -1;
+}
+.integration-heading {
+  margin-bottom: 14px;
+}
+.integration-heading h3 {
+  margin: 6px 0 0;
+  color: var(--dark);
+  font-size: 21px;
+}
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.integration-card {
+  padding: 21px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.integration-value {
+  display: block;
+  margin-top: 18px;
+}
+.integration-value > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #415461;
+  font-size: 11px;
+  font-weight: 750;
+}
+.integration-value textarea {
+  width: 100%;
+  min-height: 78px;
+  padding: 10px 11px;
+  resize: vertical;
+  border: 1px solid #c5d0d6;
+  border-radius: 4px;
+  background: #fbfcfd;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.ad-form-grid.compact {
+  padding-top: 14px;
+}
+.placement-intro {
+  margin-top: 20px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 900px) {
+  .integration-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1429,3 +1429,87 @@ textarea.field-control {
     padding-bottom: 13px;
   }
 }
+
+.privacy-consent {
+  position: fixed;
+  z-index: 120;
+  right: 22px;
+  bottom: 22px;
+  left: 22px;
+  display: flex;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 22px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  color: #fff;
+  background: #07132f;
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 18px 60px rgba(7,19,47,.32);
+}
+.privacy-consent strong {
+  display: block;
+  font-size: 16px;
+}
+.privacy-consent p {
+  max-width: 610px;
+  margin: 7px 0 0;
+  color: #d5def0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.privacy-actions {
+  display: flex;
+  flex: none;
+  gap: 9px;
+}
+.privacy-consent .button-secondary {
+  color: #fff;
+  background: transparent;
+  border-color: #8290aa;
+}
+.privacy-reopen {
+  position: fixed;
+  z-index: 80;
+  right: 14px;
+  bottom: 12px;
+  padding: 7px 10px;
+  color: #536078;
+  background: rgba(255,255,255,.94);
+  border: 1px solid #c8d3e7;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.network-ad-placement {
+  min-height: 90px;
+  padding: 10px 0;
+  overflow: hidden;
+}
+.network-ad-placement > small {
+  display: block;
+  margin-bottom: 6px;
+  color: #7c879a;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+@media (max-width: 680px) {
+  .privacy-consent {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    padding: 18px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .privacy-actions {
+    width: 100%;
+    flex-direction: column-reverse;
+  }
+  .privacy-actions .button {
+    width: 100%;
+  }
+}

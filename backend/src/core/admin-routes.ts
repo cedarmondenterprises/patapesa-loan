@@ -15,6 +15,36 @@ const validUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const idParam = (req: AuthRequest): string => String(req.params.id || '');
 const adSlots = ['HOME_BELOW_PLANNER', 'LOANS_BELOW_HEADER'];
+const integrationProviders = [
+  'GOOGLE_ANALYTICS',
+  'GOOGLE_TAG_MANAGER',
+  'PLAUSIBLE',
+  'GOOGLE_ADSENSE',
+] as const;
+type IntegrationProvider = (typeof integrationProviders)[number];
+const extractIntegrationId = (provider: IntegrationProvider, value: unknown): string | null => {
+  const input = String(value || '').trim();
+  if (!input || input.length > 10_000) return null;
+  const patterns: Record<IntegrationProvider, RegExp> = {
+    GOOGLE_ANALYTICS: /\bG-[A-Z0-9]{6,15}\b/i,
+    GOOGLE_TAG_MANAGER: /\bGTM-[A-Z0-9]{4,12}\b/i,
+    GOOGLE_ADSENSE: /\bca-pub-\d{10,20}\b/i,
+    PLAUSIBLE: /(?:data-domain=["']([^"']+)["']|^([a-z0-9.-]+)$/i,
+  };
+  const match = input.match(patterns[provider]);
+  const id = String(match?.[1] || match?.[2] || match?.[0] || '').trim();
+  if (!id) return null;
+  if (provider === 'GOOGLE_ADSENSE') return id.toLowerCase();
+  if (provider !== 'PLAUSIBLE') return id.toUpperCase();
+  const hostname = id.toLowerCase().replace(/^https?:\/\//, '').split('/')[0].replace(/\.$/, '');
+  return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)
+    ? hostname
+    : null;
+};
+const cleanAdSenseSlot = (value: unknown): string | null => {
+  const slot = String(value || '').trim();
+  return slot === '' ? '' : /^\d{5,20}$/.test(slot) ? slot : null;
+};
 const safeAdUrl = (value: string, optional = false) => {
   if (!value) return optional;
   if (value.length > 2048) return false;
@@ -398,6 +428,77 @@ router.patch(
       if (!row) return res.status(404).json({ success: false, message: 'Request not found' });
       await record(req, 'SUPPORT_STATUS_CHANGED', 'support_request', id);
       return res.json({ success: true, data: row });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.get('/integrations', requirePermission('ads:manage'), async (_req, res, next) => {
+  try {
+    return res.json({
+      success: true,
+      data: await query(
+        `SELECT provider,public_id AS "publicId",home_slot AS "homeSlot",
+         loans_slot AS "loansSlot",enabled,updated_at AS "updatedAt"
+         FROM site_integrations ORDER BY provider`,
+      ),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put(
+  '/integrations/:provider',
+  requirePermission('ads:manage'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const provider = String(req.params.provider || '').toUpperCase() as IntegrationProvider;
+      if (!integrationProviders.includes(provider))
+        return res.status(400).json({ success: false, message: 'Unsupported integration provider' });
+      const publicId = extractIntegrationId(provider, req.body.value ?? req.body.publicId);
+      if (!publicId)
+        return res.status(400).json({
+          success: false,
+          message: 'Enter a valid provider ID or an unmodified standard provider snippet',
+        });
+      const homeSlot =
+          provider === 'GOOGLE_ADSENSE' ? cleanAdSenseSlot(req.body.homeSlot) : '',
+        loansSlot = provider === 'GOOGLE_ADSENSE' ? cleanAdSenseSlot(req.body.loansSlot) : '',
+        enabled = req.body.enabled === true;
+      if (homeSlot === null || loansSlot === null)
+        return res.status(400).json({
+          success: false,
+          message: 'AdSense placement IDs must contain 5 to 20 digits',
+        });
+      if (provider === 'GOOGLE_ADSENSE' && enabled && !homeSlot && !loansSlot)
+        return res.status(400).json({
+          success: false,
+          message: 'Add at least one AdSense placement ID before enabling AdSense',
+        });
+      const row = (
+        await query(
+          `INSERT INTO site_integrations(provider,public_id,home_slot,loans_slot,enabled,created_by,updated_by)
+           VALUES($1,$2,$3,$4,$5,$6,$6)
+           ON CONFLICT(provider) DO UPDATE SET public_id=EXCLUDED.public_id,
+           home_slot=EXCLUDED.home_slot,loans_slot=EXCLUDED.loans_slot,
+           enabled=EXCLUDED.enabled,updated_by=EXCLUDED.updated_by,updated_at=NOW()
+           RETURNING provider,public_id AS "publicId",home_slot AS "homeSlot",
+           loans_slot AS "loansSlot",enabled,updated_at AS "updatedAt"`,
+          [provider, publicId, homeSlot || null, loansSlot || null, enabled, actor(req)],
+        )
+      )[0];
+      await record(
+        req,
+        `INTEGRATION_${provider}_${enabled ? 'ENABLED' : 'SAVED'}`,
+        'site_integration',
+      );
+      return res.json({
+        success: true,
+        data: row,
+        message: enabled ? 'Integration enabled' : 'Integration saved but disabled',
+      });
     } catch (error) {
       return next(error);
     }
