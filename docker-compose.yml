@@ -45,7 +45,8 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
     expose: ["5000"]
-    networks: [app, data]
+    # Keep database traffic private while allowing outbound SMTP delivery.
+    networks: [app, data, egress]
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
@@ -127,6 +128,7 @@ services:
 
 networks:
   edge:
+  egress:
   app:
     internal: true
   data:
