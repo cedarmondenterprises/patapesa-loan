@@ -12,6 +12,7 @@ jest.mock('../src/core/db', () => ({
 
 import app from '../src/app';
 import { createToken } from '../src/core/auth';
+import { normalizeMetricsPath, renderMetrics } from '../src/core/metrics';
 
 describe('API security and authentication surface', () => {
   beforeEach(() => {
@@ -452,4 +453,18 @@ describe('API security and authentication surface', () => {
     expect(response.body.data.status).toBe('ACTIVE');
     expect(queryMock.mock.calls[5][0]).toContain('INSERT INTO audit_logs');
   });
+  it('publishes privacy-safe Prometheus metrics without a public API route', async () => {
+    expect(
+      normalizeMetricsPath(
+        '/api/admin/kyc/d7663877-533c-4c37-ab4b-d5cf9daf42bb/identity',
+      ),
+    ).toBe('/api/admin/kyc/:id/identity');
+    const response = await request(app).get('/api/metrics');
+    expect(response.status).toBe(404);
+    const metrics = renderMetrics();
+    expect(metrics).toContain('patapesa_http_requests_total');
+    expect(metrics).toContain('route="/api/metrics"');
+    expect(metrics).not.toContain('d7663877-533c-4c37-ab4b-d5cf9daf42bb');
+  });
+
 });

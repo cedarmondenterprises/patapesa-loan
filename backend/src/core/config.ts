@@ -33,6 +33,7 @@ export const config = {
   nodeEnv,
   isProduction,
   port: positiveInteger('APP_PORT', Number(process.env.PORT || 5000)),
+  metricsPort: positiveInteger('METRICS_PORT', 9464),
   databaseUrl: process.env.DATABASE_URL?.trim() || '',
   databaseHost: process.env.DB_HOST?.trim() || 'localhost',
   databasePort: positiveInteger('DB_PORT', 5432),

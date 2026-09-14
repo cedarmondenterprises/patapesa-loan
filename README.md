@@ -134,6 +134,37 @@ Open `http://localhost:3001` for staff access.
 - `GET|PATCH /api/admin/applications` (staff permission required)
 - `GET|PATCH /api/admin/kyc` (staff permission required)
 
+## Private monitoring and security scans
+
+The optional observability stack adds Prometheus, a provisioned Grafana operations dashboard, and
+Uptime Kuma without publishing management services to the internet. Grafana and Uptime Kuma bind
+to the VM loopback interface only. Generate a separate Grafana password in `.env`, then start the
+overlay:
+
+```bash
+openssl rand -hex 32
+sudo docker compose -f docker-compose.yml -f docker-compose.observability.yml config
+sudo docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+```
+
+Access the dashboards through SSH tunnels from your computer:
+
+```bash
+ssh -L 3100:127.0.0.1:3100 -L 3002:127.0.0.1:3002 azureuser@YOUR_VM_IP
+```
+
+Open `http://127.0.0.1:3100` for Grafana and `http://127.0.0.1:3002` for Uptime Kuma. In Uptime
+Kuma, create HTTP monitors for `http://backend:5000/api/health`, `http://frontend:3000/`, and
+`http://admin:3001/`. Do not mount the Docker socket. The Prometheus endpoint listens on the
+private application network at `backend:9464/metrics`; it is intentionally absent from Caddy and
+both Next.js proxies. Metric labels contain normalized routes, HTTP methods, and status codes only,
+not customer data.
+
+A passive OWASP ZAP baseline scan is defined in `.github/workflows/security.yml`. It runs weekly
+and can also be started manually from GitHub Actions. The workflow does not perform an active
+attack scan against production. Review the retained HTML and JSON reports before changing any ZAP
+rule.
+
 ## Release checks
 
 ```bash

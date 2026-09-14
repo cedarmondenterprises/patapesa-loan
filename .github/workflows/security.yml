@@ -1,0 +1,54 @@
+name: Baseline security scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patapesa-zap-baseline
+  cancel-in-progress: false
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: customer
+            target: https://cedarmondtv.site
+          - name: admin
+            target: https://admin.cedarmondtv.site
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare report directory
+        run: mkdir -p zap-output && chmod 777 zap-output
+      - name: Run passive ZAP baseline
+        id: zap
+        shell: bash
+        run: |
+          set +e
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE/zap-output:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${{ matrix.target }}" -m 3 -I \
+            -r "${{ matrix.name }}-report.html" \
+            -J "${{ matrix.name }}-report.json"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-${{ matrix.name }}-${{ github.run_number }}
+          path: zap-output/
+          retention-days: 30
+      - name: Enforce baseline result
+        if: always()
+        run: test "${{ steps.zap.outputs.exit_code }}" = "0"

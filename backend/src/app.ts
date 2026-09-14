@@ -7,6 +7,7 @@ import rateLimit from 'express-rate-limit';
 import routes from './core/routes';
 import { config } from './core/config';
 import { pool } from './core/db';
+import { metricsMiddleware } from './core/metrics';
 
 const app = express();
 app.disable('x-powered-by');
@@ -17,6 +18,7 @@ app.use((req, res, next) => {
   res.locals.requestId = id;
   next();
 });
+app.use(metricsMiddleware);
 app.use(
   helmet({
     contentSecurityPolicy: {
