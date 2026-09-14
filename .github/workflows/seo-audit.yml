@@ -1,0 +1,48 @@
+name: Production SEO monitor
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '20 3 * * 1,4'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-seo-monitor
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check metadata, crawlability and sitemap
+        run: node frontend/scripts/seo-audit.mjs
+      - name: Check public links
+        run: npx --yes linkinator@6.1.2 https://cedarmondtv.site --recurse --skip 'https://admin.cedarmondtv.site|/login|/register|/dashboard|/forgot-password|/reset-password'
+      - name: Run Lighthouse SEO and performance audits
+        run: npx --yes @lhci/cli@0.15.1 autorun --config=frontend/lighthouserc.cjs
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-seo-reports
+          path: frontend/.lighthouseci/reports
+          retention-days: 14
+          if-no-files-found: ignore
+
+  notify-indexnow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Notify participating search engines
+        run: node frontend/scripts/submit-indexnow.mjs
