@@ -44,7 +44,7 @@ services:
       - grafana_data:/var/lib/grafana
       - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks: [observability]
+    networks: [observability, management]
     depends_on: [prometheus]
     restart: unless-stopped
     read_only: true
@@ -74,6 +74,7 @@ services:
     logging: *observability_logging
 
 networks:
+  management:
   observability:
     internal: true
 
