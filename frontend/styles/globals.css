@@ -537,6 +537,45 @@ textarea.field-control {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.ad-placement {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  margin-top: 28px;
+  padding: 19px 22px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ad-placement > img {
+  width: 90px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.ad-copy small,
+.ad-copy strong {
+  display: block;
+}
+.ad-copy small {
+  color: #70808c;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ad-copy strong {
+  margin-top: 5px;
+  color: var(--forest);
+  font-size: 16px;
+}
+.ad-copy p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
 .comparison-section {
   display: grid;
   grid-template-columns: minmax(240px, 0.65fr) minmax(0, 1.35fr);
@@ -1075,6 +1114,17 @@ textarea.field-control {
   .comparison-section {
     gap: 28px;
     padding: 65px 0;
+  }
+  .ad-placement {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+  .ad-placement > img {
+    width: 100%;
+    height: 150px;
+  }
+  .ad-placement > .button {
+    width: 100%;
   }
   .comparison-table {
     min-width: 660px;

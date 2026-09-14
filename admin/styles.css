@@ -491,6 +491,31 @@ td select {
   border-color: #e0b1ad;
   color: var(--red);
 }
+.identity-cell strong,
+.identity-cell small,
+.identity-cell code {
+  display: block;
+}
+.identity-cell small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.identity-cell code {
+  margin-top: 9px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.identity-cell button {
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--forest);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 table {
   width: 100%;
   border-collapse: collapse;
@@ -581,6 +606,113 @@ tbody tr:last-child td {
   border-color: var(--red);
   color: #832d25;
 }
+.ad-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  padding-top: 28px;
+}
+.ad-admin-intro {
+  grid-column: 1 / -1;
+  max-width: 720px;
+}
+.ad-admin-intro h2 {
+  margin: 7px 0 0;
+  color: var(--dark);
+  font-size: 32px;
+  letter-spacing: -0.04em;
+}
+.ad-admin-intro > p:last-child {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.ad-editor {
+  padding: 24px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.ad-editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+.ad-editor-head h3 {
+  margin: 0;
+  color: var(--forest);
+}
+.ad-editor-head small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.ad-switch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 800;
+}
+.ad-switch input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--copper);
+}
+.ad-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+  padding-top: 20px;
+}
+.ad-form-grid .span-2 {
+  grid-column: 1 / -1;
+}
+.ad-form-grid label > span {
+  display: block;
+  margin-bottom: 7px;
+  color: #415461;
+  font-size: 11px;
+  font-weight: 750;
+}
+.ad-form-grid input,
+.ad-form-grid textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid #c5d0d6;
+  border-radius: 4px;
+  background: white;
+  color: var(--ink);
+}
+.ad-form-grid textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+.ad-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.ad-editor-actions small {
+  color: var(--muted);
+}
+.ad-editor-actions button {
+  min-height: 40px;
+  padding: 8px 15px;
+  border: 0;
+  font-size: 12px;
+  font-weight: 800;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -652,6 +784,9 @@ tbody tr:last-child td {
   .overview-grid {
     grid-template-columns: 1fr;
   }
+  .ad-admin-grid {
+    grid-template-columns: 1fr;
+  }
   .overview-heading {
     align-items: start;
     flex-direction: column;
@@ -718,6 +853,12 @@ tbody tr:last-child td {
   .panel {
     padding: 14px;
     overflow: auto;
+  }
+  .ad-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .ad-form-grid .span-2 {
+    grid-column: auto;
   }
   .toolbar {
     align-items: stretch;

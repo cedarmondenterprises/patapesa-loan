@@ -14,6 +14,18 @@ const actor = (req: AuthRequest) => {
 const validUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const idParam = (req: AuthRequest): string => String(req.params.id || '');
+const adSlots = ['HOME_BELOW_PLANNER', 'LOANS_BELOW_HEADER'];
+const safeAdUrl = (value: string, optional = false) => {
+  if (!value) return optional;
+  if (value.length > 2048) return false;
+  if (/^\/(?!\/)[^\s]*$/.test(value)) return true;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+};
 
 async function record(req: AuthRequest, action: string, type: string, id?: string) {
   await query(
@@ -47,6 +59,7 @@ router.get('/dashboard', requirePermission('dashboard:view'), async (_req, res, 
     const data = (
       await query(`SELECT
   (SELECT COUNT(*) FROM users WHERE status='ACTIVE') AS "activeUsers",
+  (SELECT COUNT(*) FROM users WHERE status='ACTIVE' AND last_login>=NOW()-INTERVAL '30 minutes') AS "recentlyActive",
   (SELECT COUNT(*) FROM registration_submissions WHERE submitted_at>=CURRENT_DATE-INTERVAL '7 days') AS "recentRegistrations",
   (SELECT COUNT(*) FROM loan_applications WHERE status IN ('SUBMITTED','UNDER_REVIEW')) AS "pendingApplications",
   (SELECT COUNT(*) FROM kyc_verifications WHERE verification_status='PENDING') AS "pendingKyc",
@@ -56,7 +69,8 @@ router.get('/dashboard', requirePermission('dashboard:view'), async (_req, res, 
   (SELECT COALESCE(SUM(GREATEST(total_due-amount_paid,0)),0) FROM repayment_schedules WHERE due_date<CURRENT_DATE AND status IN ('PENDING','PARTIALLY_PAID','OVERDUE')) AS "overdue",
   (SELECT COALESCE(SUM(total_interest),0) FROM loans) AS "contractedInterest",
   (SELECT COALESCE(SUM(processing_fee),0) FROM loans) AS "processingFees",
-  (SELECT COUNT(*) FROM support_requests WHERE status IN ('OPEN','IN_PROGRESS')) AS "openSupport"`)
+  (SELECT COUNT(*) FROM support_requests WHERE status IN ('OPEN','IN_PROGRESS')) AS "openSupport",
+  (SELECT COUNT(*) FROM ad_placements WHERE enabled=true AND (starts_at IS NULL OR starts_at<=NOW()) AND (ends_at IS NULL OR ends_at>NOW())) AS "activeAds"`)
     )[0];
     return res.json({ success: true, data });
   } catch (error) {
@@ -389,6 +403,93 @@ router.patch(
     }
   },
 );
+
+router.get('/ads', requirePermission('ads:manage'), async (_req, res, next) => {
+  try {
+    return res.json({
+      success: true,
+      data: await query(
+        `SELECT id,slot,sponsor,headline,body,cta_label AS "ctaLabel",
+         target_url AS "targetUrl",image_url AS "imageUrl",enabled,
+         starts_at AS "startsAt",ends_at AS "endsAt",updated_at AS "updatedAt"
+         FROM ad_placements ORDER BY slot`,
+      ),
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/ads/:slot', requirePermission('ads:manage'), async (req: AuthRequest, res, next) => {
+  try {
+    const slot = String(req.params.slot || '').toUpperCase(),
+      sponsor = String(req.body.sponsor || '').trim(),
+      headline = String(req.body.headline || '').trim(),
+      adBody = String(req.body.body || '').trim(),
+      ctaLabel = String(req.body.ctaLabel || '').trim(),
+      targetUrl = String(req.body.targetUrl || '').trim(),
+      imageUrl = String(req.body.imageUrl || '').trim(),
+      startsAt = String(req.body.startsAt || '').trim() || null,
+      endsAt = String(req.body.endsAt || '').trim() || null,
+      enabled = req.body.enabled === true;
+    if (!adSlots.includes(slot))
+      return res.status(400).json({ success: false, message: 'Unknown advertising placement' });
+    if (
+      sponsor.length < 2 ||
+      sponsor.length > 120 ||
+      headline.length < 3 ||
+      headline.length > 160 ||
+      adBody.length < 5 ||
+      adBody.length > 500 ||
+      ctaLabel.length < 2 ||
+      ctaLabel.length > 60
+    )
+      return res
+        .status(400)
+        .json({ success: false, message: 'Complete the ad fields within the allowed lengths' });
+    if (!safeAdUrl(targetUrl) || !safeAdUrl(imageUrl, true))
+      return res.status(400).json({
+        success: false,
+        message: 'Ad links must use HTTPS or a safe site-relative path',
+      });
+    if (
+      (startsAt && !Number.isFinite(Date.parse(startsAt))) ||
+      (endsAt && !Number.isFinite(Date.parse(endsAt))) ||
+      (startsAt && endsAt && Date.parse(endsAt) <= Date.parse(startsAt))
+    )
+      return res.status(400).json({ success: false, message: 'Ad schedule is invalid' });
+    const row = (
+      await query(
+        `INSERT INTO ad_placements(slot,sponsor,headline,body,cta_label,target_url,image_url,enabled,starts_at,ends_at,created_by,updated_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)
+         ON CONFLICT(slot) DO UPDATE SET sponsor=EXCLUDED.sponsor,headline=EXCLUDED.headline,
+         body=EXCLUDED.body,cta_label=EXCLUDED.cta_label,target_url=EXCLUDED.target_url,
+         image_url=EXCLUDED.image_url,enabled=EXCLUDED.enabled,starts_at=EXCLUDED.starts_at,
+         ends_at=EXCLUDED.ends_at,updated_by=EXCLUDED.updated_by,updated_at=NOW()
+         RETURNING id,slot,sponsor,headline,body,cta_label AS "ctaLabel",
+         target_url AS "targetUrl",image_url AS "imageUrl",enabled,
+         starts_at AS "startsAt",ends_at AS "endsAt",updated_at AS "updatedAt"`,
+        [
+          slot,
+          sponsor,
+          headline,
+          adBody,
+          ctaLabel,
+          targetUrl,
+          imageUrl || null,
+          enabled,
+          startsAt,
+          endsAt,
+          actor(req),
+        ],
+      )
+    )[0] as { id: string };
+    await record(req, enabled ? 'AD_PUBLISHED' : 'AD_SAVED', 'ad_placement', row.id);
+    return res.json({ success: true, data: row, message: enabled ? 'Ad is live' : 'Ad saved' });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/audit', requirePermission('audit:view'), async (_req, res, next) => {
   try {

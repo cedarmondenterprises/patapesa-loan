@@ -33,6 +33,38 @@ describe('API security and authentication surface', () => {
     expect(response.body.message).toBe('Authentication required');
   });
 
+  it('treats a malformed session cookie as unauthenticated', async () => {
+    const response = await request(app).get('/api/auth/me').set('Cookie', 'patapesa_session=%ZZ');
+    expect(response.status).toBe(401);
+    expect(response.body.message).toBe('Authentication required');
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
+  it('returns only the requested active advertising placement', async () => {
+    queryMock.mockResolvedValueOnce([
+      {
+        slot: 'HOME_BELOW_PLANNER',
+        sponsor: 'Example',
+        headline: 'Useful service',
+        body: 'A factual description',
+        ctaLabel: 'Learn more',
+        targetUrl: 'https://example.com',
+        imageUrl: null,
+      },
+    ]);
+    const response = await request(app).get('/api/ads?slot=HOME_BELOW_PLANNER');
+    expect(response.status).toBe(200);
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].slot).toBe('HOME_BELOW_PLANNER');
+    expect(response.headers['cache-control']).toContain('max-age=60');
+  });
+
+  it('rejects unknown advertising placements', async () => {
+    const response = await request(app).get('/api/ads?slot=UNKNOWN');
+    expect(response.status).toBe(400);
+    expect(queryMock).not.toHaveBeenCalled();
+  });
+
   it('rejects state changes from an untrusted browser origin', async () => {
     const response = await request(app)
       .post('/api/auth/logout')
@@ -152,6 +184,42 @@ describe('API security and authentication surface', () => {
     expect(response.status).toBe(403);
   });
 
+  it('returns a customer loan balance and repayment schedule', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const token = createToken({ id, email: 'user@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ id, email: 'user@example.com', firstName: 'Jane' }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb',
+          loanNumber: 'PPL-10001',
+          outstanding: '27500.00',
+          status: 'ACTIVE',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2',
+          loanNumber: 'PPL-10001',
+          sequence: 1,
+          remaining: '2500.00',
+          status: 'PENDING',
+        },
+      ]);
+    const response = await request(app)
+      .get('/api/account/overview')
+      .set('Cookie', `patapesa_session=${token}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.loans[0].outstanding).toBe('27500.00');
+    expect(response.body.data.installments[0].remaining).toBe('2500.00');
+    expect(queryMock.mock.calls[5][0]).toContain("payment_status='COMPLETED'");
+    expect(queryMock.mock.calls[6][0]).toContain('repayment_schedules');
+  });
+
   it('submits an eligible loan application without requiring KYC first', async () => {
     const id = '8f95d132-4665-4c15-8623-652e76f18c70';
     const token = createToken({ id, email: 'user@example.com', authVersion: 0 });
@@ -211,7 +279,11 @@ describe('API security and authentication surface', () => {
         { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
       ])
       .mockResolvedValueOnce([
-        { id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb', applicationNumber: 'PPL-TEST', status: 'SUBMITTED' },
+        {
+          id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb',
+          applicationNumber: 'PPL-TEST',
+          status: 'SUBMITTED',
+        },
       ]);
     const response = await request(app)
       .post('/api/loans/applications')
@@ -245,6 +317,103 @@ describe('API security and authentication surface', () => {
       .set('Cookie', `patapesa_session=${token}`);
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual([]);
+  });
+
+  it('allows an advertising manager to save a disabled placement', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'manager@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ '?column?': 1 }])
+      .mockResolvedValueOnce([
+        {
+          id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb',
+          slot: 'HOME_BELOW_PLANNER',
+          enabled: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .put('/api/admin/ads/HOME_BELOW_PLANNER')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        sponsor: 'Example partner',
+        headline: 'A useful customer offer',
+        body: 'Clear terms for customers who choose to learn more.',
+        ctaLabel: 'Learn more',
+        targetUrl: 'https://example.com/offer',
+        imageUrl: '',
+        startsAt: '',
+        endsAt: '',
+        enabled: false,
+      });
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Ad saved');
+    expect(queryMock.mock.calls[2][0]).toContain('INSERT INTO ad_placements');
+  });
+
+  it('rejects unsafe advertising links before writing data', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'manager@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }]);
+    const response = await request(app)
+      .put('/api/admin/ads/HOME_BELOW_PLANNER')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        sponsor: 'Example partner',
+        headline: 'A useful customer offer',
+        body: 'Clear terms for customers who choose to learn more.',
+        ctaLabel: 'Learn more',
+        targetUrl: 'javascript:alert(1)',
+        enabled: true,
+      });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('HTTPS');
+    expect(queryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps full identity numbers out of the KYC queue', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const token = createToken({ id, email: 'staff@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([
+        {
+          id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb',
+          idType: 'NATIONAL_ID',
+          idNumberLast4: '1234',
+          status: 'PENDING',
+        },
+      ]);
+    const response = await request(app)
+      .get('/api/admin/kyc')
+      .set('Cookie', `patapesa_session=${token}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data[0].idNumberLast4).toBe('1234');
+    expect(response.body.data[0].idNumber).toBeUndefined();
+    expect(queryMock.mock.calls[2][0]).not.toContain('id_number_ciphertext');
+  });
+
+  it('audits deliberate access to a full identity number', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const kycId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const token = createToken({ id, email: 'staff@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([{ id: kycId, id_number_ciphertext: null, id_number: '12345678' }])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .get(`/api/admin/kyc/${kycId}/identity`)
+      .set('Cookie', `patapesa_session=${token}`);
+    expect(response.status).toBe(200);
+    expect(response.body.data.idNumber).toBe('12345678');
+    expect(queryMock.mock.calls[3][1][1]).toBe('KYC_IDENTITY_VIEWED');
   });
 
   it('returns the authenticated staff role and permissions', async () => {

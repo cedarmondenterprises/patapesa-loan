@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
+import AdSlot from '../components/AdSlot';
 import { api, ApiError } from '../lib/api';
 
 type Product = {
@@ -123,6 +124,12 @@ export default function Loans() {
     setStep(1);
     setMessage('');
   }
+  function cancelApplication() {
+    sessionStorage.removeItem(draftKey);
+    setSelected(null);
+    setStep(1);
+    setMessage('');
+  }
   async function apply(e: FormEvent) {
     e.preventDefault();
     if (step === 1) {
@@ -174,6 +181,7 @@ export default function Loans() {
           subject to identity and affordability checks.
         </p>
       </header>
+      <AdSlot slot="LOANS_BELOW_HEADER" />
       {message && (
         <p
           className={`notice mt-8 ${message.includes('reference') ? 'notice-success' : 'notice-error'}`}
@@ -236,7 +244,7 @@ export default function Loans() {
               <button
                 type="button"
                 aria-label="Close"
-                onClick={() => setSelected(null)}
+                onClick={cancelApplication}
                 className="text-2xl text-slate-500"
               >
                 ×
@@ -381,7 +389,7 @@ export default function Loans() {
             <div className="flex gap-3 border-t border-pata-900/10 px-7 py-5">
               <button
                 type="button"
-                onClick={() => (step === 1 ? setSelected(null) : setStep(1))}
+                onClick={() => (step === 1 ? cancelApplication() : setStep(1))}
                 className="button button-secondary flex-1"
               >
                 {step === 1 ? 'Cancel' : 'Back'}

@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import Brand from '../components/Brand';
 import { api, ApiError } from '../lib/api';
 
-type Row = Record<string, string | string[] | number | null>;
+type Row = Record<string, string | string[] | number | boolean | null>;
 type Metrics = Record<string, string>;
 type Dialog = {
   title: string;
@@ -17,8 +17,19 @@ type Dialog = {
 const groups = [
   { label: 'Workspace', items: ['Overview', 'Registrations', 'Users & roles'] },
   { label: 'Lending', items: ['Loan review', 'KYC review', 'Loan ledger'] },
-  { label: 'Operations', items: ['Support', 'Audit'] },
+  { label: 'Operations', items: ['Support', 'Advertising', 'Audit'] },
 ];
+const permissionFor: Record<string, string> = {
+  Overview: 'dashboard:view',
+  Registrations: 'users:view',
+  'Users & roles': 'users:view',
+  'Loan review': 'loans:review',
+  'KYC review': 'kyc:review',
+  'Loan ledger': 'ledger:view',
+  Support: 'support:manage',
+  Advertising: 'ads:manage',
+  Audit: 'audit:view',
+};
 const money = (v: unknown) => `KES ${Number(v || 0).toLocaleString('en-KE')}`;
 const date = (v: unknown) =>
   v
@@ -34,9 +45,11 @@ export default function Dashboard() {
     [kyc, setKyc] = useState<Row[]>([]),
     [ledger, setLedger] = useState<Row[]>([]),
     [support, setSupport] = useState<Row[]>([]),
+    [ads, setAds] = useState<Row[]>([]),
     [audit, setAudit] = useState<Row[]>([]),
     [roles, setRoles] = useState<string[]>([]),
     [permissions, setPermissions] = useState<string[]>([]),
+    [revealedKyc, setRevealedKyc] = useState<Record<string, string>>({}),
     [message, setMessage] = useState(''),
     [query, setQuery] = useState(''),
     [loading, setLoading] = useState(true),
@@ -45,37 +58,42 @@ export default function Dashboard() {
   const safe = async (path: string) =>
     api<{ data: Row[] | Metrics }>(path)
       .then((r) => r.data)
-      .catch(() => null);
+      .catch((error) => {
+        if (error instanceof ApiError && error.status === 401) throw error;
+        return null;
+      });
   async function load(background = false) {
     try {
-      if (!background) {
-        const me = await api<{ data: { roles: string[]; permissions: string[] } }>('/admin/me');
-        setRoles(me.data.roles);
-        setPermissions(me.data.permissions);
-      }
+      const me = await api<{ data: { roles: string[]; permissions: string[] } }>('/admin/me');
+      const currentPermissions = me.data.permissions;
+      setRoles(me.data.roles);
+      setPermissions(currentPermissions);
+      const allowed = (permission: string) => currentPermissions.includes(permission);
       const [m, u, a, k] = await Promise.all([
-        safe('/admin/dashboard'),
-        safe('/admin/users'),
-        safe('/admin/applications'),
-        safe('/admin/kyc'),
+        allowed('dashboard:view') ? safe('/admin/dashboard') : null,
+        allowed('users:view') ? safe('/admin/users') : null,
+        allowed('loans:review') ? safe('/admin/applications') : null,
+        allowed('kyc:review') ? safe('/admin/kyc') : null,
       ]);
       if (m) setMetrics(m as Metrics);
       if (u) setUsers(u as Row[]);
       if (a) setApps(a as Row[]);
       if (k) setKyc(k as Row[]);
       if (!background) {
-        const [l, s, au] = await Promise.all([
-          safe('/admin/ledger'),
-          safe('/admin/support'),
-          safe('/admin/audit'),
+        const [l, s, ad, au] = await Promise.all([
+          allowed('ledger:view') ? safe('/admin/ledger') : null,
+          allowed('support:manage') ? safe('/admin/support') : null,
+          allowed('ads:manage') ? safe('/admin/ads') : null,
+          allowed('audit:view') ? safe('/admin/audit') : null,
         ]);
         if (l) setLedger(l as Row[]);
         if (s) setSupport(s as Row[]);
+        if (ad) setAds(ad as Row[]);
         if (au) setAudit(au as Row[]);
       }
       setLastSync(new Date());
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (error instanceof ApiError && [401, 403].includes(error.status)) {
         await router.replace('/');
         return;
       }
@@ -98,6 +116,14 @@ export default function Dashboard() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, []);
+  useEffect(() => {
+    if (permissions.length && !permissions.includes(permissionFor[tab])) {
+      const firstAllowed = groups
+        .flatMap((group) => group.items)
+        .find((item) => permissions.includes(permissionFor[item]));
+      if (firstAllowed) setTab(firstAllowed);
+    }
+  }, [permissions, tab]);
   async function act(path: string, method: string, body: Row = {}, success = 'Action completed') {
     try {
       await api(path, { method, body: JSON.stringify(body) });
@@ -112,6 +138,21 @@ export default function Dashboard() {
   }
   function openRegistrationPdf(id: Row[string]) {
     window.open(`/api/admin/users/${id}/registration.pdf`, '_blank', 'noopener,noreferrer');
+  }
+  async function revealIdentity(id: string) {
+    try {
+      const result = await api<{ data: { idNumber: string } }>(`/admin/kyc/${id}/identity`);
+      setRevealedKyc((current) => ({ ...current, [id]: result.data.idNumber }));
+      window.setTimeout(() => {
+        setRevealedKyc((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }, 60_000);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to reveal identity');
+    }
   }
   async function signout() {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -165,22 +206,25 @@ export default function Dashboard() {
         {groups.map((g) => (
           <div className="nav-group" key={g.label}>
             <span className="nav-label">{g.label}</span>
-            {g.items.map((x) => (
-              <button
-                key={x}
-                className={tab === x ? 'active' : ''}
-                onClick={() => {
-                  setTab(x);
-                  setQuery('');
-                }}
-              >
-                <span className="nav-text">
-                  <NavIcon name={x} />
-                  {x}
-                </span>
-                {counts[x] ? <span className="nav-count">{counts[x]}</span> : null}
-              </button>
-            ))}
+            {g.items
+              .filter((x) => permissions.includes(permissionFor[x]))
+              .map((x) => (
+                <button
+                  key={x}
+                  className={tab === x ? 'active' : ''}
+                  onClick={() => {
+                    setTab(x);
+                    setQuery('');
+                    if (x !== 'KYC review') setRevealedKyc({});
+                  }}
+                >
+                  <span className="nav-text">
+                    <NavIcon name={x} />
+                    {x}
+                  </span>
+                  {counts[x] ? <span className="nav-count">{counts[x]}</span> : null}
+                </button>
+              ))}
           </div>
         ))}
         <div className="sidebar-footer">
@@ -282,15 +326,29 @@ export default function Dashboard() {
                       {permissions.includes('roles:assign') && (
                         <select
                           aria-label={`Role for ${u.email}`}
-                          defaultValue={Array.isArray(u.roles) ? u.roles[0] || 'NONE' : 'NONE'}
-                          onChange={(e) =>
-                            void act(
-                              `/admin/users/${u.id}/role`,
-                              'PUT',
-                              { role: e.target.value },
-                              'Staff role updated',
-                            )
-                          }
+                          value={Array.isArray(u.roles) ? u.roles[0] || 'NONE' : 'NONE'}
+                          onChange={(e) => {
+                            const role = e.target.value;
+                            ask({
+                              title:
+                                role === 'NONE'
+                                  ? 'Remove staff access?'
+                                  : `Assign ${role.replace('_', ' ')} role?`,
+                              copy:
+                                role === 'NONE'
+                                  ? `Remove all staff access from ${u.email}. Their customer account will remain available.`
+                                  : `Give ${u.email} the permissions attached to the ${role.replace('_', ' ')} role.`,
+                              label: role === 'NONE' ? 'Remove staff access' : 'Assign role',
+                              danger: role === 'NONE' || role === 'SUPER_ADMIN',
+                              run: () =>
+                                act(
+                                  `/admin/users/${u.id}/role`,
+                                  'PUT',
+                                  { role },
+                                  'Staff role updated',
+                                ),
+                            });
+                          }}
                         >
                           <option>NONE</option>
                           <option>STAFF</option>
@@ -398,7 +456,30 @@ export default function Dashboard() {
                 heads={['Customer', 'Identity', 'Submitted', 'Decision']}
                 rows={kyc.map((k) => [
                   <Person row={k} key="p" />,
-                  `${String(k.idType).replaceAll('_', ' ')}\n${k.idNumber}`,
+                  <div className="identity-cell" key="identity">
+                    <strong>{String(k.idType).replaceAll('_', ' ')}</strong>
+                    <small>Ending {k.idNumberLast4 || '—'}</small>
+                    {revealedKyc[String(k.id)] ? (
+                      <>
+                        <code>{revealedKyc[String(k.id)]}</code>
+                        <button
+                          onClick={() =>
+                            setRevealedKyc((current) => {
+                              const next = { ...current };
+                              delete next[String(k.id)];
+                              return next;
+                            })
+                          }
+                        >
+                          Hide number
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={() => void revealIdentity(String(k.id))}>
+                        Reveal for review
+                      </button>
+                    )}
+                  </div>,
                   date(k.createdAt),
                   <div className="actions" key="d">
                     <button
@@ -512,6 +593,14 @@ export default function Dashboard() {
                 ])}
               />
             )}
+            {tab === 'Advertising' && (
+              <AdManager
+                ads={ads}
+                save={(slot, body) =>
+                  act(`/admin/ads/${slot}`, 'PUT', body, 'Advertising placement saved')
+                }
+              />
+            )}
             {tab === 'Audit' && (
               <Table
                 heads={['Time', 'Actor', 'Action', 'Resource', 'IP address']}
@@ -548,6 +637,7 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
       <div className="cards">
         {[
           ['Active users', metrics.activeUsers],
+          ['Signed in · 30 min', metrics.recentlyActive],
           ['Registrations · 7 days', metrics.recentRegistrations],
           ['Applications to review', metrics.pendingApplications],
           ['KYC to review', metrics.pendingKyc],
@@ -558,6 +648,7 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
           ['Contracted interest', money(metrics.contractedInterest)],
           ['Processing fees', money(metrics.processingFees)],
           ['Open support', metrics.openSupport],
+          ['Live ads', metrics.activeAds],
         ].map(([x, v]) => (
           <div className="card" key={x}>
             <span>{x}</span>
@@ -599,6 +690,160 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
     </>
   );
 }
+function AdManager({
+  ads,
+  save,
+}: {
+  ads: Row[];
+  save: (slot: string, body: Row) => Promise<void>;
+}) {
+  const slots = [
+    {
+      id: 'HOME_BELOW_PLANNER',
+      name: 'Homepage placement',
+      location: 'Below the loan estimator on the public homepage',
+    },
+    {
+      id: 'LOANS_BELOW_HEADER',
+      name: 'Loan page placement',
+      location: 'Below the introduction on the public loan page',
+    },
+  ];
+  const inputDate = (value: Row[string] | undefined) => {
+    if (!value) return '';
+    const parsed = new Date(String(value));
+    const offset = parsed.getTimezoneOffset() * 60_000;
+    return new Date(parsed.getTime() - offset).toISOString().slice(0, 16);
+  };
+  return (
+    <div className="ad-admin-grid">
+      <div className="ad-admin-intro">
+        <p className="overline">First-party placements</p>
+        <h2>Advertising controls</h2>
+        <p>
+          Ads are off until you complete a placement and enable it. PataPesa does not inject
+          third-party ad scripts or trackers.
+        </p>
+      </div>
+      {slots.map((slot) => {
+        const ad = ads.find((item) => item.slot === slot.id);
+        return (
+          <form
+            className="ad-editor"
+            key={`${slot.id}-${ad?.updatedAt || 'new'}`}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              void save(slot.id, {
+                sponsor: String(data.get('sponsor') || ''),
+                headline: String(data.get('headline') || ''),
+                body: String(data.get('body') || ''),
+                ctaLabel: String(data.get('ctaLabel') || ''),
+                targetUrl: String(data.get('targetUrl') || ''),
+                imageUrl: String(data.get('imageUrl') || ''),
+                startsAt: String(data.get('startsAt') || ''),
+                endsAt: String(data.get('endsAt') || ''),
+                enabled: data.get('enabled') === 'on',
+              });
+            }}
+          >
+            <div className="ad-editor-head">
+              <div>
+                <h3>{slot.name}</h3>
+                <small>{slot.location}</small>
+              </div>
+              <label className="ad-switch">
+                <input name="enabled" type="checkbox" defaultChecked={ad?.enabled === true} />
+                <span>Enabled</span>
+              </label>
+            </div>
+            <div className="ad-form-grid">
+              <label>
+                <span>Sponsor name</span>
+                <input
+                  name="sponsor"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  defaultValue={String(ad?.sponsor || '')}
+                  placeholder="Business or campaign name"
+                />
+              </label>
+              <label>
+                <span>Button label</span>
+                <input
+                  name="ctaLabel"
+                  required
+                  minLength={2}
+                  maxLength={60}
+                  defaultValue={String(ad?.ctaLabel || '')}
+                  placeholder="Learn more"
+                />
+              </label>
+              <label className="span-2">
+                <span>Headline</span>
+                <input
+                  name="headline"
+                  required
+                  minLength={3}
+                  maxLength={160}
+                  defaultValue={String(ad?.headline || '')}
+                  placeholder="Short, factual headline"
+                />
+              </label>
+              <label className="span-2">
+                <span>Description</span>
+                <textarea
+                  name="body"
+                  required
+                  minLength={5}
+                  maxLength={500}
+                  defaultValue={String(ad?.body || '')}
+                  placeholder="Explain the offer without misleading claims"
+                />
+              </label>
+              <label className="span-2">
+                <span>Destination URL</span>
+                <input
+                  name="targetUrl"
+                  required
+                  defaultValue={String(ad?.targetUrl || '')}
+                  placeholder="https://example.com/offer"
+                />
+              </label>
+              <label className="span-2">
+                <span>Image URL (optional)</span>
+                <input
+                  name="imageUrl"
+                  defaultValue={String(ad?.imageUrl || '')}
+                  placeholder="HTTPS image URL or /images/banner.jpg"
+                />
+              </label>
+              <label>
+                <span>Starts (optional)</span>
+                <input
+                  name="startsAt"
+                  type="datetime-local"
+                  defaultValue={inputDate(ad?.startsAt)}
+                />
+              </label>
+              <label>
+                <span>Ends (optional)</span>
+                <input name="endsAt" type="datetime-local" defaultValue={inputDate(ad?.endsAt)} />
+              </label>
+            </div>
+            <div className="ad-editor-actions">
+              <small>{ad?.updatedAt ? `Last saved ${date(ad.updatedAt)}` : 'Not configured'}</small>
+              <button className="primary" type="submit">
+                Save placement
+              </button>
+            </div>
+          </form>
+        );
+      })}
+    </div>
+  );
+}
 function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     Overview: 'M4 4h6v6H4zM14 4h6v10h-6zM4 14h6v6H4zM14 18h6v2h-6z',
@@ -609,6 +854,7 @@ function NavIcon({ name }: { name: string }) {
     'KYC review': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10M9 12l2 2 4-5',
     'Loan ledger': 'M4 3h16v18H4zM8 7h8M8 11h8M8 15h3M14 15h2',
     Support: 'M21 15a4 4 0 0 1-4 4H8l-5 3v-7a7 7 0 0 1-1-4 9 9 0 0 1 9-9h1a9 9 0 0 1 9 9z',
+    Advertising: 'M3 11v2l12 5V6L3 11zM15 9h4l2 2v2l-2 2h-4M6 14l2 7h4l-2-5',
     Audit: 'M12 3a9 9 0 1 0 9 9M12 7v5l3 2M17 3h4v4',
   };
   return (

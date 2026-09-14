@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Layout from '../components/Layout';
+import AdSlot from '../components/AdSlot';
 import { api } from '../lib/api';
 
 type QuoteProduct = {
@@ -273,6 +274,8 @@ export default function Home() {
           </aside>
         </div>
       </section>
+
+      <AdSlot slot="HOME_BELOW_PLANNER" />
 
       <section className="comparison-section" aria-labelledby="comparison-title">
         <div className="section-copy">

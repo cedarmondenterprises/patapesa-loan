@@ -25,6 +25,27 @@ type Payment = {
   status: string;
   paymentDate: string;
 };
+type Loan = {
+  id: string;
+  loanNumber: string;
+  principal: string;
+  totalPayable: string;
+  paid: string;
+  outstanding: string;
+  status: string;
+  disbursedAt: string;
+  maturityDate: string;
+};
+type Installment = {
+  id: string;
+  loanNumber: string;
+  sequence: number;
+  dueDate: string;
+  totalDue: string;
+  amountPaid: string;
+  remaining: string;
+  status: string;
+};
 const money = (n: unknown) => `KES ${Number(n || 0).toLocaleString('en-KE')}`;
 
 export default function Dashboard() {
@@ -33,19 +54,30 @@ export default function Dashboard() {
     [apps, setApps] = useState<Application[]>([]),
     [kyc, setKyc] = useState<Kyc>(null),
     [payments, setPayments] = useState<Payment[]>([]),
+    [loans, setLoans] = useState<Loan[]>([]),
+    [installments, setInstallments] = useState<Installment[]>([]),
     [message, setMessage] = useState(''),
     [loadError, setLoadError] = useState(''),
     [loading, setLoading] = useState(true);
   const load = () => {
     return api<{
-      data: { user: User; applications: Application[]; kyc: Kyc; payments: Payment[] };
-      }>('/account/overview')
+      data: {
+        user: User;
+        applications: Application[];
+        kyc: Kyc;
+        payments: Payment[];
+        loans: Loan[];
+        installments: Installment[];
+      };
+    }>('/account/overview')
       .then(({ data }) => {
         setLoadError('');
         setUser(data.user);
         setApps(data.applications);
         setKyc(data.kyc);
         setPayments(data.payments);
+        setLoans(data.loans);
+        setInstallments(data.installments);
       })
       .catch((error) => {
         if (error instanceof ApiError && error.status === 401) return router.replace('/login');
@@ -78,6 +110,9 @@ export default function Dashboard() {
     }
   }
   const latest = apps[0],
+    nextInstallment = installments.find(
+      (item) => Number(item.remaining) > 0 && !['PAID', 'WAIVED'].includes(item.status),
+    ),
     paid = payments
       .filter((p) => p.status === 'COMPLETED')
       .reduce((sum, p) => sum + Number(p.amount), 0);
@@ -138,16 +173,20 @@ export default function Dashboard() {
           value={
             !kyc
               ? 'Verify identity'
-              : latest
-                ? latest.status.replace(/_/g, ' ').toLowerCase()
-                : 'Choose a loan'
+              : nextInstallment
+                ? `Pay ${money(nextInstallment.remaining)}`
+                : latest
+                  ? latest.status.replace(/_/g, ' ').toLowerCase()
+                  : 'Choose a loan'
           }
           note={
             !kyc
               ? 'Required before a loan can be approved'
-              : latest
-                ? `Application ${latest.applicationNumber}`
-                : 'Compare the full repayment first'
+              : nextInstallment
+                ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
+                : latest
+                  ? `Application ${latest.applicationNumber}`
+                  : 'Compare the full repayment first'
           }
         />
         <Summary
@@ -167,6 +206,76 @@ export default function Dashboard() {
           border
         />
       </section>
+      {loans.length > 0 && (
+        <section className="surface mt-10 p-6 sm:p-8">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+            <div>
+              <p className="eyebrow">Repayment overview</p>
+              <h2 className="mt-2 text-2xl font-bold text-pata-950">Your loan balance</h2>
+            </div>
+            <p className="text-sm text-slate-500">Confirmed payments update these figures.</p>
+          </div>
+          <div className="mt-7 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {loans.map((loan) => (
+              <article className="border border-pata-900/15 bg-pata-50 p-5" key={loan.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      {loan.loanNumber}
+                    </span>
+                    <strong className="mt-2 block text-2xl text-pata-950">
+                      {money(loan.outstanding)}
+                    </strong>
+                    <small className="text-slate-500">Outstanding balance</small>
+                  </div>
+                  <StatusBadge status={loan.status} />
+                </div>
+                <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-pata-900/10 pt-4 text-sm">
+                  <div>
+                    <dt className="text-slate-500">Paid</dt>
+                    <dd className="mt-1 font-semibold text-pata-950">{money(loan.paid)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Matures</dt>
+                    <dd className="mt-1 font-semibold text-pata-950">
+                      {new Date(loan.maturityDate).toLocaleDateString('en-KE')}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </div>
+          {installments.length > 0 && (
+            <div className="mt-8 overflow-x-auto border-t border-pata-900/15 pt-6">
+              <h3 className="font-bold text-pata-950">Repayment schedule</h3>
+              <table className="mt-4 w-full min-w-[680px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
+                    <th className="pb-3">Instalment</th>
+                    <th className="pb-3">Due date</th>
+                    <th className="pb-3">Amount due</th>
+                    <th className="pb-3">Remaining</th>
+                    <th className="pb-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {installments.map((item) => (
+                    <tr className="border-b border-pata-900/10 last:border-0" key={item.id}>
+                      <td className="py-4 font-semibold">#{item.sequence}</td>
+                      <td>{new Date(item.dueDate).toLocaleDateString('en-KE')}</td>
+                      <td>{money(item.totalDue)}</td>
+                      <td>{money(item.remaining)}</td>
+                      <td>
+                        <StatusBadge status={item.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.45fr_.75fr]">
         <section className="surface p-6 sm:p-8">
           <div className="flex items-center justify-between gap-4">

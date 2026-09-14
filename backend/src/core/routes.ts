@@ -500,7 +500,7 @@ router.get('/auth/me', requireAuth, async (req: AuthRequest, res, next) => {
 router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const id = userId(req);
-    const [users, applications, kycRows, payments] = await Promise.all([
+    const [users, applications, kycRows, payments, loans, installments] = await Promise.all([
       query(
         'SELECT id,email,phone,first_name AS "firstName",last_name AS "lastName",is_email_verified AS "emailVerified" FROM users WHERE id=$1',
         [id],
@@ -517,12 +517,37 @@ router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next)
         'SELECT id,payment_amount AS amount,currency,payment_method AS method,transaction_reference AS reference,payment_status AS status,payment_date AS "paymentDate" FROM payments WHERE user_id=$1 ORDER BY payment_date DESC',
         [id],
       ),
+      query(
+        `SELECT l.id,l.loan_number AS "loanNumber",l.principal_amount AS principal,
+         l.total_amount_payable AS "totalPayable",COALESCE(p.paid,0) AS paid,
+         GREATEST(l.total_amount_payable-COALESCE(p.paid,0),0) AS outstanding,
+         l.status,l.disbursement_date AS "disbursedAt",l.maturity_date AS "maturityDate"
+         FROM loans l
+         LEFT JOIN (SELECT loan_id,SUM(payment_amount) paid FROM payments
+           WHERE payment_status='COMPLETED' GROUP BY loan_id) p ON p.loan_id=l.id
+         WHERE l.user_id=$1 ORDER BY l.disbursement_date DESC`,
+        [id],
+      ),
+      query(
+        `SELECT rs.id,l.loan_number AS "loanNumber",rs.sequence_number AS sequence,
+         rs.due_date AS "dueDate",rs.total_due AS "totalDue",rs.amount_paid AS "amountPaid",
+         GREATEST(rs.total_due-rs.amount_paid,0) AS remaining,rs.status
+         FROM repayment_schedules rs JOIN loans l ON l.id=rs.loan_id
+         WHERE l.user_id=$1 ORDER BY rs.due_date,rs.sequence_number LIMIT 120`,
+        [id],
+      ),
     ]);
-    if (!users[0])
-      return res.status(404).json({ success: false, message: 'Account not found' });
+    if (!users[0]) return res.status(404).json({ success: false, message: 'Account not found' });
     return res.json({
       success: true,
-      data: { user: users[0], applications, kyc: kycRows[0] || null, payments },
+      data: {
+        user: users[0],
+        applications,
+        kyc: kycRows[0] || null,
+        payments,
+        loans,
+        installments,
+      },
     });
   } catch (error) {
     return next(error);
@@ -535,6 +560,27 @@ router.get('/products', async (_req, res, next) => {
       'SELECT id,product_code AS code,name,description,min_amount AS "minAmount",max_amount AS "maxAmount",min_term AS "minTerm",max_term AS "maxTerm",interest_rate AS "interestRate",processing_fee AS "processingFee",currency FROM loan_products WHERE status=\'ACTIVE\' ORDER BY min_amount',
     );
     res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=3600');
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/ads', async (req, res, next) => {
+  try {
+    const slot = String(req.query.slot || '').toUpperCase();
+    if (slot && !['HOME_BELOW_PLANNER', 'LOANS_BELOW_HEADER'].includes(slot))
+      return res.status(400).json({ success: false, message: 'Unknown advertising placement' });
+    const rows = await query(
+      `SELECT slot,sponsor,headline,body,cta_label AS "ctaLabel",target_url AS "targetUrl",
+       image_url AS "imageUrl" FROM ad_placements
+       WHERE enabled=true AND ($1='' OR slot=$1)
+       AND (starts_at IS NULL OR starts_at<=NOW())
+       AND (ends_at IS NULL OR ends_at>NOW())
+       ORDER BY slot`,
+      [slot],
+    );
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
     return res.json({ success: true, data: rows });
   } catch (error) {
     return next(error);
@@ -839,31 +885,43 @@ router.patch(
 
 router.get('/admin/kyc', requireAuth, requirePermission('kyc:review'), async (_req, res, next) => {
   try {
-    const rows = await query<{
-      id: string;
-      idType: string;
-      idNumberLast4: string;
-      id_number_ciphertext: string | null;
-      id_number: string | null;
-      status: string;
-      createdAt: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-    }>(`SELECT k.id,k.id_type AS "idType",COALESCE(k.id_number_last4,RIGHT(k.id_number,4)) AS "idNumberLast4",k.id_number_ciphertext,k.id_number,
+    const rows =
+      await query(`SELECT k.id,k.id_type AS "idType",COALESCE(k.id_number_last4,RIGHT(k.id_number,4)) AS "idNumberLast4",
     k.verification_status AS status,k.created_at AS "createdAt",u.first_name AS "firstName",u.last_name AS "lastName",u.email
     FROM kyc_verifications k JOIN users u ON u.id=k.user_id WHERE k.verification_status='PENDING' ORDER BY k.created_at ASC LIMIT 200`);
-    const data = rows.map(({ id_number_ciphertext, id_number, ...row }) => ({
-      ...row,
-      idNumber: id_number_ciphertext
-        ? decryptSensitive(id_number_ciphertext, config.kycEncryptionKey)
-        : id_number,
-    }));
-    return res.json({ success: true, data });
+    return res.json({ success: true, data: rows });
   } catch (error) {
     return next(error);
   }
 });
+
+router.get(
+  '/admin/kyc/:id/identity',
+  requireAuth,
+  requirePermission('kyc:review'),
+  param('id').isUUID(),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const errors = errorsFor(req);
+      if (errors.length) return res.status(400).json({ success: false, message: errors[0] });
+      const row = (
+        await query<{ id: string; id_number_ciphertext: string | null; id_number: string | null }>(
+          'SELECT id,id_number_ciphertext,id_number FROM kyc_verifications WHERE id=$1',
+          [req.params.id],
+        )
+      )[0];
+      if (!row)
+        return res.status(404).json({ success: false, message: 'Identity record not found' });
+      const idNumber = row.id_number_ciphertext
+        ? decryptSensitive(row.id_number_ciphertext, config.kycEncryptionKey)
+        : row.id_number;
+      await audit(req, 'KYC_IDENTITY_VIEWED', 'kyc_verification', row.id);
+      return res.json({ success: true, data: { idNumber } });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
 
 router.patch(
   '/admin/kyc/:id',

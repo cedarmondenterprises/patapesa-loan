@@ -489,6 +489,30 @@ CREATE TABLE IF NOT EXISTS support_tickets (
 CREATE INDEX IF NOT EXISTS idx_support_tickets_user_id ON support_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
 
+-- First-party advertising placements. These are intentionally disabled until
+-- a staff member supplies and enables approved creative.
+CREATE TABLE IF NOT EXISTS ad_placements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    slot VARCHAR(50) NOT NULL UNIQUE CHECK (slot IN ('HOME_BELOW_PLANNER', 'LOANS_BELOW_HEADER')),
+    sponsor VARCHAR(120) NOT NULL,
+    headline VARCHAR(160) NOT NULL,
+    body VARCHAR(500) NOT NULL,
+    cta_label VARCHAR(60) NOT NULL,
+    target_url TEXT NOT NULL,
+    image_url TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    starts_at TIMESTAMPTZ,
+    ends_at TIMESTAMPTZ,
+    created_by UUID REFERENCES users(id),
+    updated_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ad_placements_active
+ON ad_placements(slot, enabled, starts_at, ends_at);
+
 -- Admin users (roles and permissions)
 CREATE TABLE IF NOT EXISTS admin_roles (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -512,8 +536,8 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 
 INSERT INTO admin_roles(name,description,permissions,status) VALUES
-('SUPER_ADMIN','Full platform administration','["dashboard:view","users:view","users:manage","roles:assign","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","audit:view"]'::jsonb,'ACTIVE'),
-('MANAGER','Operational and financial management','["dashboard:view","users:view","users:manage","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","audit:view"]'::jsonb,'ACTIVE'),
+('SUPER_ADMIN','Full platform administration','["dashboard:view","users:view","users:manage","roles:assign","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
+('MANAGER','Operational and financial management','["dashboard:view","users:view","users:manage","kyc:review","loans:review","loans:disburse","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
 ('STAFF','Customer registration, identity, loan and support operations','["dashboard:view","users:view","users:manage","kyc:review","loans:review","ledger:view","support:manage"]'::jsonb,'ACTIVE')
 ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,permissions=EXCLUDED.permissions,status='ACTIVE',updated_at=NOW();
 

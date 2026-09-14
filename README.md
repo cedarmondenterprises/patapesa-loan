@@ -51,15 +51,22 @@ sudo docker compose exec backend npm run admin:grant -- staff@example.com
 
 That user signs in only at `https://YOUR_ADMIN_DOMAIN`. The customer site has no admin route. Do not share staff accounts.
 
-New registrations stay pending and cannot sign in until staff approve them. The three staff roles are:
+New registrations are activated automatically after server-side age, contact, profile, and
+declaration validation. Identity verification and affordability review are still required before
+a loan can be approved. The three staff roles are:
 
 | Role | Access |
 | --- | --- |
 | Super Admin | All admin features, including assigning or removing staff roles |
-| Manager | Dashboard, users, registrations, KYC, loans, ledger, support, and audit |
+| Manager | Dashboard, users, registrations, KYC, loans, ledger, support, advertising, and audit |
 | Staff | Day-to-day registration, KYC, loan, ledger, and support workflows |
 
-The admin portal includes live registration and user queues, account activation/suspension, role assignment, KYC review, loan review and disbursement confirmation, portfolio totals, a drill-down loan ledger with CSV export, support management, and audit history. It does not initiate bank or mobile-money transfers or manually create repayments; connect an approved payment provider before handling real funds.
+The admin portal includes live registration and user queues, account activation/suspension, role
+assignment, KYC review, loan review and disbursement confirmation, portfolio totals, a drill-down
+loan ledger with CSV export, support management, advertising placements, and audit history.
+Advertising is disabled by default, clearly labelled when enabled, and does not inject third-party
+scripts. The platform does not initiate bank or mobile-money transfers or manually create
+repayments; connect an approved payment provider before handling real funds.
 
 ## Updating safely
 
@@ -114,13 +121,15 @@ Open `http://localhost:3001` for staff access.
 - `POST /api/auth/forgot-password`, `/reset-password`
 - `GET /api/auth/me`
 - `GET /api/products`
+- `GET /api/ads`
 - `GET|POST /api/loans/applications`
 - `GET|POST /api/kyc`
 - `GET /api/payments`
 - `POST /api/contact`
-- `GET /api/admin/me`, `/dashboard`, `/users`, `/roles`, `/ledger`, `/support`, `/audit`
+- `GET /api/admin/me`, `/dashboard`, `/users`, `/roles`, `/ledger`, `/support`, `/ads`, `/audit`
 - `PATCH /api/admin/users/:id/status`, `/support/:id`
 - `PUT /api/admin/users/:id/role`
+- `PUT /api/admin/ads/:slot`
 - `POST /api/admin/applications/:id/disburse`
 - `GET|PATCH /api/admin/applications` (staff permission required)
 - `GET|PATCH /api/admin/kyc` (staff permission required)

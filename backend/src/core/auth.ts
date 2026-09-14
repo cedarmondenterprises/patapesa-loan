@@ -28,7 +28,12 @@ function cookieToken(req: Request): string | undefined {
   const match = cookies
     .map((value) => value.trim().split('='))
     .find(([name]) => name === config.authCookieName);
-  return match?.[1] ? decodeURIComponent(match.slice(1).join('=')) : undefined;
+  if (!match?.[1]) return undefined;
+  try {
+    return decodeURIComponent(match.slice(1).join('='));
+  } catch {
+    return undefined;
+  }
 }
 
 export function setAuthCookie(res: Response, token: string, remember: boolean): void {
