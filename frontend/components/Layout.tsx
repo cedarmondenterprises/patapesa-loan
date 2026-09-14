@@ -4,14 +4,76 @@ import { ReactNode, useState } from 'react';
 import { useRouter } from 'next/router';
 import Brand from './Brand';
 
-export default function Layout({ children, title = 'PataPesa', description = 'Transparent digital loan applications in Kenya' }: { children: ReactNode; title?: string; description?: string }) {
+const SITE_URL = 'https://cedarmondtv.site';
+const PRIVATE_PATHS = new Set(['/dashboard', '/login', '/register', '/forgot-password', '/reset-password']);
+
+export default function Layout({
+  children,
+  title = 'PataPesa | Mobile loans in Kenya',
+  description = 'Compare mobile loan options in Kenya, review estimated interest and fees, and apply online through PataPesa.',
+  canonicalPath,
+  noIndex = false,
+}: {
+  children: ReactNode;
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  noIndex?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const nav = [['/', 'Home'], ['/loans', 'Loans'], ['/about', 'Application process'], ['/faq', 'Help']];
+  const path = canonicalPath || router.pathname;
+  const canonicalUrl = `${SITE_URL}${path === '/' ? '' : path}`;
+  const preventIndexing = noIndex || PRIVATE_PATHS.has(router.pathname);
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${SITE_URL}/#organization`,
+        name: 'PataPesa',
+        url: SITE_URL,
+        logo: `${SITE_URL}/favicon.svg`,
+        areaServed: { '@type': 'Country', name: 'Kenya' },
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${SITE_URL}/#website`,
+        name: 'PataPesa',
+        url: SITE_URL,
+        inLanguage: 'en-KE',
+        publisher: { '@id': `${SITE_URL}/#organization` },
+      },
+    ],
+  };
+
   return (
     <>
       <Head>
-        <title>{title}</title><meta name="description" content={description} /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#102a2e" /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:image" content="/social-preview.svg" /><link rel="icon" href="/favicon.svg" />
+        <title>{title}</title>
+        <meta name="description" content={description} />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#0B1F4B" />
+        <meta name="robots" content={preventIndexing ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'} />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="PataPesa" />
+        <meta property="og:locale" content="en_KE" />
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonicalUrl} />
+        <meta property="og:image" content={`${SITE_URL}/social-preview.svg`} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={description} />
+        <meta name="twitter:image" content={`${SITE_URL}/social-preview.svg`} />
+        <link rel="icon" href="/favicon.svg" />
+        {!preventIndexing && (
+          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+        )}
       </Head>
       <div className="site-shell">
         <header className="site-header">

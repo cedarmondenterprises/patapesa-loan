@@ -1,0 +1,11 @@
+# PataPesa crawler policy
+# Public product and information pages may be crawled.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /reset-password
+
+Sitemap: https://cedarmondtv.site/sitemap.xml
+Host: cedarmondtv.site

@@ -170,8 +170,8 @@ export default function Loans() {
   }
   return (
     <Layout
-      title="Compare loans | PataPesa"
-      description="Compare PataPesa loan limits, rates, fees and repayment periods before applying."
+      title="Compare Online Loans in Kenya | PataPesa"
+      description="Compare online loan amounts, repayment periods, estimated interest and fees available through PataPesa in Kenya."
     >
       <header className="max-w-3xl border-b border-pata-900/15 pb-9">
         <p className="eyebrow">Loan products</p>

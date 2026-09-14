@@ -77,11 +77,11 @@ export default function Home() {
   }, [amount, months, product]);
 
   return (
-    <Layout title="PataPesa loans" description="Review a PataPesa loan estimate before starting an application.">
+    <Layout title="Mobile Loans in Kenya | PataPesa" description="Compare mobile loans in Kenya, calculate estimated interest and fees, and apply online through PataPesa.">
       <section className="service-intro">
         <div>
           <span className="page-kicker">PataPesa loans</span>
-          <h1>Check the numbers before you apply.</h1>
+          <h1>Mobile loans in Kenya, with every cost shown first.</h1>
         </div>
         <p>Set an amount and repayment period. The estimate updates immediately and shows each cost separately.</p>
       </section>
