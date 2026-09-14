@@ -3,19 +3,12 @@ import Link from 'next/link';
 export function LogoMark({ className = 'h-9 w-9' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <rect width="48" height="48" rx="11" fill="#102a43" />
       <path
-        d="M7 8h17.5C35.3 8 42 13.6 42 23S35.3 38 24.5 38H16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
+        d="M14 35V13h10.4c6.2 0 10.1 3.4 10.1 8.7 0 5.5-4 8.9-10.3 8.9h-4.1V35H14Zm6.1-10h4c2.7 0 4.3-1.2 4.3-3.3 0-2-1.5-3.1-4.3-3.1h-4V25Z"
+        fill="white"
       />
-      <path
-        d="M7 8v32M8 24h17.5c3.8 0 6.5-1.7 6.5-5s-2.7-5-6.5-5H15"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="5"
-      />
-      <path d="M35 38h8" stroke="#df4f2f" strokeWidth="5" />
+      <path d="M27.5 35h8" stroke="#13a17e" strokeWidth="4" strokeLinecap="round" />
     </svg>
   );
 }
@@ -28,7 +21,11 @@ export default function Brand({ compact = false }: { compact?: boolean }) {
       aria-label="PataPesa home"
     >
       <LogoMark />
-      {!compact && <span className="text-[1.28rem] font-black tracking-[-0.045em]">PataPesa</span>}
+      {!compact && (
+        <span className="brand-name">
+          Pata<span>Pesa</span>
+        </span>
+      )}
     </Link>
   );
 }

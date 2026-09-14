@@ -27,17 +27,13 @@ export default function Layout({
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#17324d" />
+        <meta name="theme-color" content="#102a43" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:image" content="/social-preview.svg" />
         <link rel="icon" href="/favicon.svg" />
       </Head>
       <div className="site-shell">
-        <div className="utility-bar">
-          <span>Digital credit, clearly explained</span>
-          <span>Kenya · KES</span>
-        </div>
         <header className="site-header">
           <nav className="site-nav" aria-label="Main navigation">
             <Brand />
@@ -53,7 +49,7 @@ export default function Layout({
                 Sign in
               </Link>
               <Link href="/register" className="button button-primary button-small">
-                Check your options
+                Apply now
               </Link>
               <button
                 className="menu-button"
@@ -75,7 +71,7 @@ export default function Layout({
                 </Link>
               ))}
               <Link href="/login">Sign in</Link>
-              <Link href="/register">Check your options</Link>
+              <Link href="/register">Apply now</Link>
             </div>
           )}
         </header>
@@ -84,9 +80,7 @@ export default function Layout({
           <div className="footer-grid">
             <div>
               <Brand />
-              <p className="footer-copy">
-                Understand the cost, complete one clear application and follow every review step.
-              </p>
+              <p className="footer-copy">Clear costs. One application. A status you can follow.</p>
             </div>
             <div className="footer-links">
               <strong>Company</strong>
@@ -103,7 +97,7 @@ export default function Layout({
           </div>
           <div className="footer-bottom">
             <span>© {new Date().getFullYear()} PataPesa</span>
-            <span>Credit is subject to assessment. Borrow only what you can repay.</span>
+            <span>Loan approval is subject to identity, eligibility and affordability checks.</span>
           </div>
         </footer>
       </div>

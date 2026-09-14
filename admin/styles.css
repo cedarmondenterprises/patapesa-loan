@@ -1,12 +1,12 @@
 :root {
-  --forest: #17324d;
-  --dark: #111f2d;
-  --paper: #fffefa;
-  --canvas: #f4f1e9;
-  --ink: #111820;
-  --muted: #64717b;
-  --line: #d7dbdd;
-  --copper: #df4f2f;
+  --forest: #102a43;
+  --dark: #0a1c2c;
+  --paper: #ffffff;
+  --canvas: #f5f7f8;
+  --ink: #17212b;
+  --muted: #5d6b78;
+  --line: #d8e0e5;
+  --copper: #0a7a62;
   --red: #b43f35;
   --green: #19704b;
   --blue: #345d96;
@@ -30,7 +30,7 @@ button {
   cursor: pointer;
 }
 :focus-visible {
-  outline: 3px solid rgba(223, 79, 47, 0.38);
+  outline: 3px solid rgba(10, 122, 98, 0.32);
   outline-offset: 2px;
 }
 .brand {
