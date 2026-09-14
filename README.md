@@ -2,6 +2,10 @@
 
 PataPesa is a full-stack Kenyan loan-application portal. Customers can register, submit encrypted identity details, compare loan products, apply, track applications, inspect payment history, recover accounts, and create support requests.
 
+## Borrower experience
+
+The customer portal uses an original, mobile-first PataPesa interface. The homepage begins with a live amount-and-term estimate, shows interest, processing fees and total repayment before registration, and keeps the application, identity review, decision and repayment journey in one account. Public copy must remain factual: estimates are not approvals, and no page may imply that funds are transferred until a regulated payment integration is configured.
+
 ## Architecture
 
 - Caddy terminates HTTPS and is the only public application service.
