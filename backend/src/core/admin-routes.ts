@@ -29,7 +29,7 @@ const extractIntegrationId = (provider: IntegrationProvider, value: unknown): st
     GOOGLE_ANALYTICS: /\bG-[A-Z0-9]{6,15}\b/i,
     GOOGLE_TAG_MANAGER: /\bGTM-[A-Z0-9]{4,12}\b/i,
     GOOGLE_ADSENSE: /\bca-pub-\d{10,20}\b/i,
-    PLAUSIBLE: /(?:data-domain=["']([^"']+)["']|^([a-z0-9.-]+)$/i,
+    PLAUSIBLE: /(?:data-domain=["']([^"']+)["']|^([a-z0-9.-]+)$)/i,
   };
   const match = input.match(patterns[provider]);
   const id = String(match?.[1] || match?.[2] || match?.[0] || '').trim();
