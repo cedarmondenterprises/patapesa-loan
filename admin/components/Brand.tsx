@@ -1,12 +1,19 @@
 export function Mark({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
-      <rect width="48" height="48" rx="11" fill="currentColor" />
       <path
-        d="M14 35V13h11.4c6.2 0 10.2 3.3 10.2 8.7 0 5.5-4 8.9-10.2 8.9h-4.7V35H14Zm6.7-10h4.2c2.6 0 4.1-1.2 4.1-3.3 0-2-1.5-3.2-4.1-3.2h-4.2V25Z"
-        fill="#fffdf7"
+        d="M7 8h17.5C35.3 8 42 13.6 42 23S35.3 38 24.5 38H16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5"
       />
-      <path d="M30 33.5h6V39h-6z" fill="#c88952" />
+      <path
+        d="M7 8v32M8 24h17.5c3.8 0 6.5-1.7 6.5-5s-2.7-5-6.5-5H15"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="5"
+      />
+      <path d="M35 38h8" stroke="#df4f2f" strokeWidth="5" />
     </svg>
   );
 }
@@ -16,7 +23,7 @@ export default function Brand() {
       <Mark />
       <span>
         <strong>PataPesa</strong>
-        <small>Administration</small>
+        <small>Credit operations</small>
       </span>
     </div>
   );

@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
-import { api, logout } from '../lib/api';
+import { api, ApiError, logout } from '../lib/api';
 
 type User = { firstName: string; lastName: string; email: string; phone: string };
 type Application = {
@@ -34,19 +34,25 @@ export default function Dashboard() {
     [kyc, setKyc] = useState<Kyc>(null),
     [payments, setPayments] = useState<Payment[]>([]),
     [message, setMessage] = useState(''),
+    [loadError, setLoadError] = useState(''),
     [loading, setLoading] = useState(true);
-  const load = () =>
-    api<{
+  const load = () => {
+    return api<{
       data: { user: User; applications: Application[]; kyc: Kyc; payments: Payment[] };
-    }>('/account/overview')
+      }>('/account/overview')
       .then(({ data }) => {
+        setLoadError('');
         setUser(data.user);
         setApps(data.applications);
         setKyc(data.kyc);
         setPayments(data.payments);
       })
-      .catch(() => router.replace('/login'))
+      .catch((error) => {
+        if (error instanceof ApiError && error.status === 401) return router.replace('/login');
+        setLoadError(error instanceof Error ? error.message : 'Unable to load your account');
+      })
       .finally(() => setLoading(false));
+  };
   useEffect(() => {
     void load();
   }, []);
@@ -115,18 +121,37 @@ export default function Dashboard() {
           {message}
         </p>
       )}
+      {loadError && (
+        <div
+          className="notice notice-error mt-6 flex items-center justify-between gap-4"
+          role="alert"
+        >
+          <span>{loadError}</span>
+          <button className="text-sm font-bold underline" onClick={() => void load()}>
+            Try again
+          </button>
+        </div>
+      )}
       <section className="mt-8 grid border-y border-pata-900/15 md:grid-cols-3">
         <Summary
-          label="Applications"
-          value={String(apps.length)}
+          label="Your next action"
+          value={
+            !kyc
+              ? 'Verify identity'
+              : latest
+                ? latest.status.replace(/_/g, ' ').toLowerCase()
+                : 'Choose a loan'
+          }
           note={
-            latest
-              ? `Latest: ${latest.status.replace(/_/g, ' ').toLowerCase()}`
-              : 'No application submitted'
+            !kyc
+              ? 'Required before a loan can be approved'
+              : latest
+                ? `Application ${latest.applicationNumber}`
+                : 'Compare the full repayment first'
           }
         />
         <Summary
-          label="Identity verification"
+          label="Identity check"
           value={kyc?.status.replace(/_/g, ' ').toLowerCase() || 'Not submitted'}
           note={
             kyc
@@ -136,7 +161,7 @@ export default function Dashboard() {
           border
         />
         <Summary
-          label="Completed payments"
+          label="Total paid"
           value={money(paid)}
           note={`${payments.length} payment record${payments.length === 1 ? '' : 's'}`}
           border

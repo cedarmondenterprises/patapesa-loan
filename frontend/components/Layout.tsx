@@ -27,13 +27,17 @@ export default function Layout({
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#123c32" />
+        <meta name="theme-color" content="#17324d" />
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:image" content="/social-preview.svg" />
         <link rel="icon" href="/favicon.svg" />
       </Head>
       <div className="site-shell">
+        <div className="utility-bar">
+          <span>Digital credit, clearly explained</span>
+          <span>Kenya · KES</span>
+        </div>
         <header className="site-header">
           <nav className="site-nav" aria-label="Main navigation">
             <Brand />
@@ -49,7 +53,7 @@ export default function Layout({
                 Sign in
               </Link>
               <Link href="/register" className="button button-primary button-small">
-                Apply now
+                Check your options
               </Link>
               <button
                 className="menu-button"
@@ -71,6 +75,7 @@ export default function Layout({
                 </Link>
               ))}
               <Link href="/login">Sign in</Link>
+              <Link href="/register">Check your options</Link>
             </div>
           )}
         </header>
@@ -80,7 +85,7 @@ export default function Layout({
             <div>
               <Brand />
               <p className="footer-copy">
-                Credit applications with clear costs, secure identity checks and human review.
+                Understand the cost, complete one clear application and follow every review step.
               </p>
             </div>
             <div className="footer-links">
@@ -93,11 +98,12 @@ export default function Layout({
               <strong>Legal</strong>
               <Link href="/terms">Terms</Link>
               <Link href="/privacy">Privacy</Link>
+              <a href="https://admin.cedarmondtv.site">Staff access</a>
             </div>
           </div>
           <div className="footer-bottom">
             <span>© {new Date().getFullYear()} PataPesa</span>
-            <span>All applications are subject to assessment and approval.</span>
+            <span>Credit is subject to assessment. Borrow only what you can repay.</span>
           </div>
         </footer>
       </div>

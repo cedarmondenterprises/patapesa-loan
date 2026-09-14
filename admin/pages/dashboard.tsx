@@ -538,6 +538,13 @@ function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
     ratio = outstanding ? Math.min(100, (overdue / outstanding) * 100) : 0;
   return (
     <>
+      <div className="overview-heading">
+        <div>
+          <p className="overline">Today’s work</p>
+          <h2>Clear the queues that affect customers.</h2>
+        </div>
+        <p>Registration, identity and credit decisions stay together in one operating view.</p>
+      </div>
       <div className="cards">
         {[
           ['Active users', metrics.activeUsers],

@@ -1,16 +1,16 @@
 :root {
-  --forest: #123c32;
-  --dark: #0b2d26;
-  --paper: #fffdf7;
-  --canvas: #f3f1eb;
-  --ink: #18211e;
-  --muted: #66736e;
-  --line: #d9dfdc;
-  --copper: #c88952;
+  --forest: #17324d;
+  --dark: #111f2d;
+  --paper: #fffefa;
+  --canvas: #f4f1e9;
+  --ink: #111820;
+  --muted: #64717b;
+  --line: #d7dbdd;
+  --copper: #df4f2f;
   --red: #b43f35;
   --green: #19704b;
   --blue: #345d96;
-  font-family: Inter, 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+  font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
   color: var(--ink);
   background: var(--canvas);
 }
@@ -30,7 +30,7 @@ button {
   cursor: pointer;
 }
 :focus-visible {
-  outline: 3px solid rgba(200, 137, 82, 0.5);
+  outline: 3px solid rgba(223, 79, 47, 0.38);
   outline-offset: 2px;
 }
 .brand {
@@ -60,7 +60,7 @@ button {
 }
 .overline {
   margin: 0;
-  color: #9a5e33;
+  color: var(--copper);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -94,11 +94,11 @@ button {
 }
 .login-identity h1 {
   margin: 18px 0 20px;
-  font-family: Georgia, serif;
+  font-family: inherit;
   font-size: 54px;
-  font-weight: 500;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  font-weight: 820;
+  line-height: 0.98;
+  letter-spacing: -0.06em;
 }
 .login-identity p:not(.overline) {
   max-width: 420px;
@@ -138,7 +138,7 @@ button {
   min-height: 49px;
   padding: 12px;
   border: 1px solid #c6d0cc;
-  border-radius: 5px;
+  border-radius: 2px;
   background: #fff;
 }
 .password-field {
@@ -168,7 +168,7 @@ button {
 .login-card > .primary {
   min-height: 50px;
   margin-top: 26px;
-  border-radius: 5px;
+  border-radius: 2px;
   font-weight: 800;
 }
 .security-note {
@@ -182,13 +182,13 @@ button {
 .shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 236px 1fr;
 }
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 25px 16px;
+  padding: 23px 14px;
   background: var(--dark);
   color: #c8d5d1;
 }
@@ -225,7 +225,7 @@ button {
   margin: 3px 0;
   padding: 11px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -237,8 +237,9 @@ button {
   color: #fff;
 }
 .sidebar button.active {
-  background: #fff;
-  color: var(--dark);
+  background: transparent;
+  color: #fff;
+  box-shadow: inset 3px 0 0 var(--copper);
 }
 .nav-text {
   display: flex;
@@ -289,7 +290,7 @@ button {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #264c42;
+  background: #28435a;
   color: #fff;
   font-size: 11px;
   font-weight: 800;
@@ -312,11 +313,11 @@ button {
 }
 .content {
   min-width: 0;
-  padding: 0 34px 60px;
+  padding: 0 38px 60px;
   overflow: auto;
 }
 .top {
-  min-height: 90px;
+  min-height: 96px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -352,7 +353,8 @@ button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border: 1px solid var(--line);
   background: var(--paper);
-  margin: 28px 0;
+  margin: 18px 0 28px;
+  border-top: 4px solid var(--forest);
 }
 .card {
   min-height: 120px;
@@ -378,6 +380,31 @@ button {
   color: var(--forest);
   font-size: 25px;
   letter-spacing: -0.03em;
+}
+.card:nth-child(-n + 4) strong {
+  color: var(--copper);
+}
+.overview-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 40px;
+  padding-top: 31px;
+}
+.overview-heading h2 {
+  max-width: 650px;
+  margin: 7px 0 0;
+  color: var(--dark);
+  font-size: clamp(27px, 3.2vw, 43px);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+}
+.overview-heading > p {
+  max-width: 390px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 .panel {
   margin-top: 22px;
@@ -429,7 +456,7 @@ td select {
   min-height: 38px;
   padding: 7px 10px;
   border: 1px solid #cbd3d0;
-  border-radius: 4px;
+  border-radius: 2px;
   background: #fff;
 }
 .toolbar input {
@@ -440,7 +467,7 @@ td select {
   min-height: 35px;
   padding: 7px 11px;
   border: 1px solid #bcc7c3;
-  border-radius: 4px;
+  border-radius: 2px;
   background: #fff;
   color: var(--forest);
   font-size: 12px;
@@ -484,7 +511,7 @@ td {
   vertical-align: top;
 }
 tbody tr:hover {
-  background: #f8f7f2;
+  background: #f0f4f7;
 }
 tbody tr:last-child td {
   border-bottom: 0;
@@ -561,7 +588,7 @@ tbody tr:last-child td {
   display: grid;
   place-items: center;
   padding: 18px;
-  background: rgba(7, 29, 24, 0.72);
+  background: rgba(10, 20, 30, 0.76);
 }
 .modal {
   width: min(470px, 100%);
@@ -599,7 +626,7 @@ tbody tr:last-child td {
 .modal-actions button {
   flex: 1;
   min-height: 42px;
-  border-radius: 4px;
+  border-radius: 2px;
   font-weight: 750;
 }
 .modal-actions .cancel {
@@ -624,6 +651,11 @@ tbody tr:last-child td {
   }
   .overview-grid {
     grid-template-columns: 1fr;
+  }
+  .overview-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 13px;
   }
 }
 @media (max-width: 780px) {
