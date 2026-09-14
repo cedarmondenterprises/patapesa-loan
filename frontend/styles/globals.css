@@ -1317,3 +1317,115 @@ textarea.field-control {
   .ledger-row { grid-template-columns: 1fr 115px 45px; padding: 0; gap: 8px; }
   .service-help > div:last-child { width: 100%; justify-content: space-between; }
 }
+
+
+/* Readability correction — comfortable type sizes across desktop and mobile. */
+.desktop-nav a,
+.text-link {
+  font-size: 15px;
+}
+.page-kicker,
+.section-number {
+  font-size: 13px;
+}
+.service-intro > p {
+  font-size: 17px;
+}
+.workspace-heading h2,
+.facts-heading h2,
+.ledger-heading h2,
+.plain-process h2 {
+  font-size: 24px;
+}
+.workspace-heading a,
+.ledger-heading a {
+  font-size: 14px;
+}
+.product-choice legend {
+  font-size: 14px;
+}
+.product-choice strong {
+  font-size: 15px;
+}
+.product-choice small {
+  font-size: 12px;
+  line-height: 1.45;
+}
+.calculator-field b {
+  font-size: 14px;
+}
+.calculator-field output {
+  font-size: 24px;
+}
+.calculator-field > small {
+  font-size: 12px;
+}
+.receipt-heading {
+  font-size: 14px;
+}
+.receipt-heading small,
+.receipt-primary small {
+  font-size: 12px;
+}
+.receipt-primary span {
+  font-size: 13px;
+}
+.loan-receipt dl > div {
+  font-size: 13px;
+}
+.loan-receipt .receipt-total {
+  font-size: 15px;
+}
+.loan-receipt > p {
+  font-size: 12px;
+  line-height: 1.55;
+}
+.facts-list strong {
+  font-size: 14px;
+}
+.facts-list span {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ledger-row {
+  font-size: 13px;
+}
+.ledger-labels {
+  font-size: 11px;
+}
+.ledger-row strong {
+  font-size: 15px;
+}
+.ledger-row small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.ledger-row button {
+  font-size: 13px;
+}
+.plain-process b {
+  font-size: 14px;
+}
+.plain-process span {
+  font-size: 13px;
+  line-height: 1.6;
+}
+.service-help strong {
+  font-size: 15px;
+}
+.service-help span,
+.service-help a {
+  font-size: 13px;
+}
+@media (max-width: 620px) {
+  .service-intro > p {
+    font-size: 16px;
+  }
+  .product-choice button {
+    min-height: 74px;
+  }
+  .loan-receipt dl > div {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+}
