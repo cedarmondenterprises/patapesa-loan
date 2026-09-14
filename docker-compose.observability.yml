@@ -36,6 +36,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_CHECK_FOR_UPDATES: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
     ports:
       - "127.0.0.1:${GRAFANA_PORT:-3100}:3000"
     volumes:
@@ -53,6 +55,8 @@ services:
 
   uptime-kuma:
     image: louislam/uptime-kuma:2
+    # Match the ownership baked into /app/data while retaining a capability-free process.
+    user: "1000:1000"
     ports:
       - "127.0.0.1:${UPTIME_KUMA_PORT:-3002}:3001"
     volumes:
