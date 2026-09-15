@@ -351,7 +351,7 @@ export default function Dashboard() {
         {loading ? (
           <Loading />
         ) : (
-          <>
+          <div key={tab} className="admin-panel-enter">
             {tab === 'Overview' && <Overview metrics={metrics} audit={audit} />}
             {tab === 'Registrations' && (
               <>
@@ -860,7 +860,7 @@ export default function Dashboard() {
                 ])}
               />
             )}
-          </>
+          </div>
         )}
       </main>
       {dialog && <ActionDialog dialog={dialog} close={() => setDialog(null)} />}

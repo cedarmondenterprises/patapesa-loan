@@ -1082,3 +1082,128 @@ tbody tr:last-child td {
     grid-template-columns: 1fr;
   }
 }
+
+/* Operational motion: short feedback cues, never continuous decoration. */
+.admin-panel-enter {
+  animation: admin-content-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sidebar button,
+.sidebar button .nav-count,
+.nav-text svg,
+.actions button,
+.small,
+.primary,
+.modal-actions button {
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease,
+    opacity 160ms ease, transform 160ms ease;
+}
+.sidebar button.active .nav-text svg {
+  transform: translateX(2px);
+}
+.sidebar button:active,
+.actions button:active:not(:disabled),
+.small:active,
+.primary:active:not(:disabled),
+.modal-actions button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.toast,
+.connection-banner {
+  animation: admin-notice-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.modal-backdrop {
+  animation: backdrop-enter 160ms ease-out both;
+}
+.modal {
+  animation: dialog-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.track span {
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.admin-panel-enter tbody tr {
+  animation: table-row-enter 220ms ease-out both;
+}
+.admin-panel-enter tbody tr:nth-child(2) {
+  animation-delay: 25ms;
+}
+.admin-panel-enter tbody tr:nth-child(3) {
+  animation-delay: 50ms;
+}
+.admin-panel-enter tbody tr:nth-child(4) {
+  animation-delay: 75ms;
+}
+.admin-panel-enter tbody tr:nth-child(5) {
+  animation-delay: 100ms;
+}
+.admin-login .login-identity .brand,
+.admin-login .login-identity > div,
+.admin-login .login-identity > small,
+.admin-login .login-card {
+  animation: admin-content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.admin-login .login-identity > div {
+  animation-delay: 70ms;
+}
+.admin-login .login-identity > small,
+.admin-login .login-card {
+  animation-delay: 120ms;
+}
+
+@keyframes admin-content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes admin-notice-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes table-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}

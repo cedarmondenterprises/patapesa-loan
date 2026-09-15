@@ -13,7 +13,7 @@ export default function AuthShell({ title, eyebrow, heading, copy, wide = false,
         <meta name="robots" content="noindex, nofollow" />
         <link rel="icon" href="/favicon.svg" />
       </Head>
-      <main className="auth-shell">
+      <main className="auth-shell auth-motion">
         <section className="auth-identity">
           <div className="[&_.text-pata-900]:text-white"><Brand /></div>
           <div className="auth-story"><p className="eyebrow">{eyebrow}</p><h1>{heading}</h1><p>{copy}</p></div>

@@ -225,9 +225,7 @@ textarea.field-control {
   background: #fff;
   border: 1px solid #c9d5ea;
   border-radius: 8px;
-  transition:
-    border 0.15s,
-    box-shadow 0.15s;
+  transition: border 0.15s, box-shadow 0.15s;
 }
 .field textarea,
 textarea.field-control {
@@ -2286,5 +2284,177 @@ textarea.field-control {
   }
   .privacy-actions .button {
     width: 100%;
+  }
+}
+
+/* Purposeful motion: feedback and orientation without visual noise. */
+.route-progress {
+  position: fixed;
+  z-index: 200;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.route-progress > span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  background: var(--copper);
+  animation: route-progress 850ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.route-view {
+  animation: content-enter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.mobile-nav-open {
+  transform-origin: top;
+  animation: menu-enter 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.menu-button span {
+  transform-origin: center;
+  transition: transform 180ms ease, opacity 140ms ease;
+}
+.menu-button.is-open span:first-child {
+  transform: translateY(6px) rotate(45deg);
+}
+.menu-button.is-open span:nth-child(2) {
+  opacity: 0;
+}
+.menu-button.is-open span:last-child {
+  transform: translateY(-6px) rotate(-45deg);
+}
+.button:active:not(:disabled),
+.product-choice button:active,
+.ledger-row button:active {
+  transform: translateY(1px);
+}
+.notice,
+.connection-banner {
+  animation: notice-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.privacy-consent {
+  animation: consent-enter 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.registration-step {
+  animation: step-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.registration-progress li,
+.registration-progress span,
+.status-badge,
+.status-badge > span,
+.application-stage-marker {
+  transition: color 220ms ease, background-color 220ms ease, border-color 220ms ease,
+    opacity 220ms ease, transform 220ms ease;
+}
+.application-progress-track > span {
+  transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.application-stage-current .application-stage-marker {
+  animation: stage-arrive 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.application-current,
+.repayment-entry {
+  animation: section-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.auth-motion .auth-identity .brand,
+.auth-motion .auth-story,
+.auth-motion .auth-assurance,
+.auth-motion .auth-form-pane > div {
+  animation: content-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.auth-motion .auth-story {
+  animation-delay: 70ms;
+}
+.auth-motion .auth-assurance,
+.auth-motion .auth-form-pane > div {
+  animation-delay: 120ms;
+}
+
+@keyframes route-progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+@keyframes content-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes menu-enter {
+  from {
+    opacity: 0;
+    transform: scaleY(0.96) translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+@keyframes notice-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes consent-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translateX(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes section-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes stage-arrive {
+  from {
+    transform: scale(0.88);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
   }
 }

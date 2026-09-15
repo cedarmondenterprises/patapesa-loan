@@ -112,7 +112,7 @@ export default function Layout({
                 Apply
               </Link>
               <button
-                className="menu-button"
+                className={`menu-button ${open ? 'is-open' : ''}`}
                 aria-label="Toggle navigation"
                 aria-expanded={open}
                 onClick={() => setOpen(!open)}
@@ -124,7 +124,7 @@ export default function Layout({
             </div>
           </nav>
           {open && (
-            <div className="mobile-nav">
+            <div className="mobile-nav mobile-nav-open">
               {nav.map(([href, label]) => (
                 <Link key={href} href={href} onClick={() => setOpen(false)}>
                   {label}
@@ -135,7 +135,9 @@ export default function Layout({
             </div>
           )}
         </header>
-        <main className="site-main">{children}</main>
+        <main key={router.asPath} className="site-main route-view">
+          {children}
+        </main>
         <footer className="site-footer">
           <div className="footer-grid">
             <div>

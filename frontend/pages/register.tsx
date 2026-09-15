@@ -316,8 +316,9 @@ export default function Register() {
             </Link>
           )}
           <form onSubmit={submit} className="registration-form">
-            {step === 0 && (
-              <>
+            <div key={step} className="registration-step">
+              {step === 0 && (
+                <>
                 <SectionIntro
                   title="Identity and contact"
                   copy="Use the legal name and National ID number shown on your identity document. The number is encrypted and sent directly into the protected KYC review queue."
@@ -388,10 +389,10 @@ export default function Register() {
                     wide
                   />
                 </div>
-              </>
-            )}
-            {step === 1 && (
-              <>
+                </>
+              )}
+              {step === 1 && (
+                <>
                 <SectionIntro
                   title="Home and work"
                   copy="Your residence helps us confirm service eligibility. Work information supports a fair affordability review; it does not guarantee approval."
@@ -467,10 +468,10 @@ export default function Register() {
                     max="80"
                   />
                 </div>
-              </>
-            )}
-            {step === 2 && (
-              <>
+                </>
+              )}
+              {step === 2 && (
+                <>
                 <SectionIntro
                   title="Financial and household profile"
                   copy="Use your regular gross monthly earnings before deductions. A range is enough at registration; supporting evidence may be requested later."
@@ -533,10 +534,10 @@ export default function Register() {
                     contacts.
                   </p>
                 </div>
-              </>
-            )}
-            {step === 3 && (
-              <>
+                </>
+              )}
+              {step === 3 && (
+                <>
                 <SectionIntro
                   title="Review, security and declarations"
                   copy="Check the summary, create your password and record each declaration separately. Your submitted answers will be stored as a versioned registration record."
@@ -632,8 +633,9 @@ export default function Register() {
                     choice at any time.
                   </Check>
                 </div>
-              </>
-            )}
+                </>
+              )}
+            </div>
             <div className="registration-actions">
               {step > 0 ? (
                 <button
