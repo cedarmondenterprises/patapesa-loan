@@ -94,6 +94,8 @@ app.use(
         users_phone_key: 'An account with this mobile number already exists. Sign in instead.',
         idx_kyc_id_number_hash:
           'An account with this National ID already exists. Sign in or contact support.',
+        payments_transaction_reference_key:
+          'This payment reference has already been submitted. Check your payment history.',
       };
       res.status(409).json({
         success: false,

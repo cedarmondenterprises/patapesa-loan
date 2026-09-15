@@ -27,11 +27,14 @@ type Kyc = {
 } | null;
 type Payment = {
   id: string;
+  loanId: string;
+  loanNumber: string;
   amount: string;
   method: string;
   reference: string;
   status: string;
   paymentDate: string;
+  failureReason?: string | null;
 };
 type Loan = {
   id: string;
@@ -267,9 +270,27 @@ export default function Dashboard() {
                     </dd>
                   </div>
                 </dl>
+                {Number(loan.outstanding) > 0 && ['ACTIVE', 'DEFAULTED'].includes(loan.status) && (
+                  <a
+                    href="#submit-repayment"
+                    className="button button-primary button-small mt-5 w-full"
+                  >
+                    Submit repayment
+                  </a>
+                )}
               </article>
             ))}
           </div>
+          <RepaymentForm
+            loans={loans}
+            installments={installments}
+            payments={payments}
+            onSaved={async (result) => {
+              setMessage(result);
+              await load();
+            }}
+            onError={(error) => setMessage(`Payment failed: ${error}`)}
+          />
           {installments.length > 0 && (
             <div className="mt-8 overflow-x-auto border-t border-pata-900/15 pt-6">
               <h3 className="font-bold text-pata-950">Repayment schedule</h3>
@@ -292,6 +313,45 @@ export default function Dashboard() {
                       <td>{money(item.remaining)}</td>
                       <td>
                         <StatusBadge status={item.status} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {payments.length > 0 && (
+            <div className="mt-8 overflow-x-auto border-t border-pata-900/15 pt-6">
+              <h3 className="font-bold text-pata-950">Payment history</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Pending payments affect your balance only after verification.
+              </p>
+              <table className="mt-4 w-full min-w-[650px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
+                    <th className="pb-3">Loan</th>
+                    <th className="pb-3">Date paid</th>
+                    <th className="pb-3">Reference</th>
+                    <th className="pb-3">Method</th>
+                    <th className="pb-3">Amount</th>
+                    <th className="pb-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((payment) => (
+                    <tr className="border-b border-pata-900/10 last:border-0" key={payment.id}>
+                      <td className="py-4 font-semibold">{payment.loanNumber}</td>
+                      <td>{new Date(payment.paymentDate).toLocaleDateString('en-KE')}</td>
+                      <td className="font-mono text-xs">{payment.reference}</td>
+                      <td>{payment.method.replace(/_/g, ' ').toLowerCase()}</td>
+                      <td>{money(payment.amount)}</td>
+                      <td>
+                        <StatusBadge status={payment.status} />
+                        {payment.failureReason && (
+                          <small className="mt-1 block max-w-[220px] text-red-700">
+                            {payment.failureReason}
+                          </small>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -448,6 +508,218 @@ function Summary({
     </div>
   );
 }
+
+function RepaymentForm({
+  loans,
+  installments,
+  payments,
+  onSaved,
+  onError,
+}: {
+  loans: Loan[];
+  installments: Installment[];
+  payments: Payment[];
+  onSaved: (message: string) => Promise<void>;
+  onError: (message: string) => void;
+}) {
+  const eligible = loans.filter(
+      (loan) => Number(loan.outstanding) > 0 && ['ACTIVE', 'DEFAULTED'].includes(loan.status),
+    ),
+    [loanId, setLoanId] = useState(eligible[0]?.id || ''),
+    [amount, setAmount] = useState(() => {
+      const first = eligible[0],
+        due = installments.find(
+          (item) =>
+            item.loanNumber === first?.loanNumber &&
+            Number(item.remaining) > 0 &&
+            !['PAID', 'WAIVED'].includes(item.status),
+        ),
+        pending = payments
+          .filter(
+            (payment) =>
+              payment.loanId === first?.id && ['PENDING', 'PROCESSING'].includes(payment.status),
+          )
+          .reduce((sum, payment) => sum + Number(payment.amount), 0),
+        available = Math.max(0, Number(first?.outstanding || 0) - pending);
+      return available ? String(Math.min(Number(due?.remaining || available), available)) : '';
+    }),
+    [submitting, setSubmitting] = useState(false);
+  if (!eligible.length) return null;
+  const selected = eligible.find((loan) => loan.id === loanId) || eligible[0],
+    nextDue = installments.find(
+      (item) =>
+        item.loanNumber === selected.loanNumber &&
+        Number(item.remaining) > 0 &&
+        !['PAID', 'WAIVED'].includes(item.status),
+    ),
+    pendingAmount = payments
+      .filter(
+        (payment) =>
+          payment.loanId === selected.id && ['PENDING', 'PROCESSING'].includes(payment.status),
+      )
+      .reduce((sum, payment) => sum + Number(payment.amount), 0),
+    availableToSubmit = Math.max(0, Number(selected.outstanding) - pendingAmount),
+    today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Africa/Nairobi',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget,
+      form = new FormData(formElement);
+    setSubmitting(true);
+    try {
+      const response = await api<{ message: string }>('/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          loanId: selected.id,
+          amount,
+          method: form.get('method'),
+          reference: form.get('reference'),
+          paymentDate: form.get('paymentDate'),
+        }),
+      });
+      formElement.reset();
+      setAmount('');
+      await onSaved(response.message);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Unable to submit payment');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section
+      id="submit-repayment"
+      className="repayment-entry scroll-mt-24"
+      aria-labelledby="repayment-entry-title"
+    >
+      <div className="repayment-entry-copy">
+        <p className="eyebrow">Repayment</p>
+        <h3 id="repayment-entry-title">Submit a payment for verification</h3>
+        <p>
+          First complete the transfer using the payment channel in your loan agreement. Then enter
+          the receipt details here. PataPesa does not collect money on this page.
+        </p>
+        <dl>
+          <div>
+            <dt>Next instalment</dt>
+            <dd>{money(nextDue?.remaining || selected.outstanding)}</dd>
+          </div>
+          <div>
+            <dt>Due date</dt>
+            <dd>
+              {nextDue ? new Date(nextDue.dueDate).toLocaleDateString('en-KE') : 'See agreement'}
+            </dd>
+          </div>
+          {pendingAmount > 0 && (
+            <div>
+              <dt>Awaiting verification</dt>
+              <dd>{money(pendingAmount)}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
+      <form onSubmit={submit} className="repayment-form">
+        <label className="field">
+          <span>Loan account</span>
+          <select
+            value={selected.id}
+            onChange={(event) => {
+              const nextLoan = eligible.find((loan) => loan.id === event.target.value);
+              setLoanId(event.target.value);
+              const due = installments.find(
+                  (item) =>
+                    item.loanNumber === nextLoan?.loanNumber &&
+                    Number(item.remaining) > 0 &&
+                    !['PAID', 'WAIVED'].includes(item.status),
+                ),
+                pending = payments
+                  .filter(
+                    (payment) =>
+                      payment.loanId === nextLoan?.id &&
+                      ['PENDING', 'PROCESSING'].includes(payment.status),
+                  )
+                  .reduce((sum, payment) => sum + Number(payment.amount), 0),
+                available = Math.max(0, Number(nextLoan?.outstanding || 0) - pending);
+              setAmount(
+                available ? String(Math.min(Number(due?.remaining || available), available)) : '',
+              );
+            }}
+          >
+            {eligible.map((loan) => (
+              <option value={loan.id} key={loan.id}>
+                {loan.loanNumber} · {money(loan.outstanding)} outstanding
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="field">
+            <span>Amount already paid (KES)</span>
+            <input
+              type="number"
+              min="1"
+              max={availableToSubmit}
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Payment method</span>
+            <select name="method" required defaultValue="MOBILE_MONEY">
+              <option value="MOBILE_MONEY">Mobile money</option>
+              <option value="BANK_TRANSFER">Bank transfer</option>
+            </select>
+          </label>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="field">
+            <span>Transaction reference</span>
+            <input
+              name="reference"
+              minLength={5}
+              maxLength={100}
+              pattern="[A-Za-z0-9][A-Za-z0-9._/-]{4,99}"
+              autoComplete="off"
+              placeholder="From your receipt"
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Date paid</span>
+            <input name="paymentDate" type="date" max={today} defaultValue={today} required />
+          </label>
+        </div>
+        <label className="repayment-confirmation">
+          <input type="checkbox" required />
+          <span>
+            I confirm that I already completed this transfer and the reference is correct.
+          </span>
+        </label>
+        {availableToSubmit <= 0 && (
+          <p className="notice notice-success">
+            Your submitted payment already covers the available balance and is awaiting
+            verification.
+          </p>
+        )}
+        <button
+          className="button button-primary w-full"
+          disabled={submitting || availableToSubmit <= 0}
+        >
+          {submitting ? 'Submitting…' : 'Submit payment for verification'}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function ApplicationJourney({ application, kyc }: { application: Application; kyc: Kyc }) {
   const status = application.status;
   const decisionReached = ['APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status);

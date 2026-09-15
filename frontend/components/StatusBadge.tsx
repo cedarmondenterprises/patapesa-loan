@@ -8,6 +8,8 @@ const styles: Record<string, string> = {
   UNDER_REVIEW: 'status-review',
   PROCESSING: 'status-review',
   REJECTED: 'status-rejected',
+  FAILED: 'status-rejected',
+  REVERSED: 'status-rejected',
   SUSPENDED: 'status-rejected',
   OVERDUE: 'status-rejected',
   DEFAULTED: 'status-rejected',

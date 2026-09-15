@@ -521,6 +521,91 @@ describe('API security and authentication surface', () => {
     expect(clientQuery.mock.calls[3][1]).toEqual([loanId, 2, 500, 50, 10, 560, 2]);
   });
 
+  it('lets a customer submit an external repayment receipt for verification', async () => {
+    const userId = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const loanId = '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2';
+    const scheduleId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const paymentId = '48d7377b-b92c-4710-862f-a876850234c9';
+    const token = createToken({ id: userId, email: 'customer@example.com', authVersion: 0 });
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: loanId }] })
+      .mockResolvedValueOnce({ rows: [{ available: '5000' }] })
+      .mockResolvedValueOnce({ rows: [{ id: scheduleId }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: paymentId,
+            amount: '1000',
+            method: 'MOBILE_MONEY',
+            reference: 'QWE12345RT',
+            status: 'PENDING',
+          },
+        ],
+      });
+    transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
+    queryMock
+      .mockResolvedValueOnce([{ id: userId, email: 'customer@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([]);
+
+    const response = await request(app)
+      .post('/api/payments')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        loanId,
+        amount: '1000',
+        method: 'MOBILE_MONEY',
+        reference: 'qwe12345rt',
+        paymentDate: new Date().toISOString().slice(0, 10),
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.status).toBe('PENDING');
+    expect(response.body.message).toBe('Payment submitted for verification');
+    expect(clientQuery.mock.calls[3][1][5]).toBe('QWE12345RT');
+    expect(clientQuery.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(clientQuery.mock.calls[1][0]).toContain("p.payment_status IN ('PENDING','PROCESSING')");
+  });
+
+  it('allocates a verified repayment across the oldest unpaid instalments', async () => {
+    const managerId = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const paymentId = '48d7377b-b92c-4710-862f-a876850234c9';
+    const loanId = '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2';
+    const firstSchedule = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const secondSchedule = 'ed45e72a-65bf-4a0f-81de-42cd2ecf3fcb';
+    const token = createToken({ id: managerId, email: 'manager@example.com', authVersion: 0 });
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ id: paymentId, loan_id: loanId, payment_amount: '600' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: firstSchedule, amount_paid: '0', remaining: '500' },
+          { id: secondSchedule, amount_paid: '0', remaining: '700' },
+        ],
+      })
+      .mockResolvedValue({ rows: [] });
+    transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
+    queryMock
+      .mockResolvedValueOnce([{ id: managerId, email: 'manager@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([]);
+
+    const response = await request(app)
+      .patch(`/api/admin/payments/${paymentId}`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({ status: 'COMPLETED' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Payment confirmed');
+    expect(clientQuery.mock.calls[2][1]).toEqual([500, 'PAID', firstSchedule, true]);
+    expect(clientQuery.mock.calls[3][1]).toEqual([100, 'PARTIALLY_PAID', secondSchedule, false]);
+    expect(clientQuery.mock.calls[4][0]).toContain("payment_status='COMPLETED'");
+  });
+
   it('allows an advertising manager to save a disabled placement', async () => {
     const id = '8f95d132-4665-4c15-8623-652e76f18c70';
     const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });

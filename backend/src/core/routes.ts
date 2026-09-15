@@ -43,6 +43,12 @@ const contactLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 const userId = (req: AuthRequest): string => {
   if (!req.user) throw Object.assign(new Error('Authentication required'), { status: 401 });
   return req.user.id;
@@ -550,7 +556,12 @@ router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next)
         [id],
       ),
       query(
-        'SELECT id,payment_amount AS amount,currency,payment_method AS method,transaction_reference AS reference,payment_status AS status,payment_date AS "paymentDate" FROM payments WHERE user_id=$1 ORDER BY payment_date DESC',
+        `SELECT p.id,p.loan_id AS "loanId",l.loan_number AS "loanNumber",
+         p.payment_amount AS amount,p.currency,p.payment_method AS method,
+         p.transaction_reference AS reference,p.payment_status AS status,
+         p.payment_date AS "paymentDate",p.failure_reason AS "failureReason"
+         FROM payments p JOIN loans l ON l.id=p.loan_id
+         WHERE p.user_id=$1 ORDER BY p.payment_date DESC`,
         [id],
       ),
       query(
@@ -842,10 +853,124 @@ router.post(
   },
 );
 
+router.post(
+  '/payments',
+  requireAuth,
+  paymentLimiter,
+  body('loanId').isUUID().withMessage('Choose a valid loan'),
+  body('amount')
+    .isFloat({ min: 1, max: 10_000_000 })
+    .matches(/^\d+(?:\.\d{1,2})?$/)
+    .withMessage('Enter a valid payment amount with no more than two decimal places'),
+  body('method')
+    .isIn(['MOBILE_MONEY', 'BANK_TRANSFER'])
+    .withMessage('Choose mobile money or bank transfer'),
+  body('reference')
+    .trim()
+    .matches(/^[A-Za-z0-9][A-Za-z0-9._/-]{4,99}$/)
+    .withMessage('Enter the transaction reference from your payment receipt'),
+  body('paymentDate').isISO8601({ strict: true }).withMessage('Enter a valid payment date'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const errors = errorsFor(req);
+      if (errors.length) return res.status(400).json({ success: false, message: errors[0] });
+      const amount = Number(req.body.amount),
+        reference = String(req.body.reference).trim().toUpperCase(),
+        paymentDate = new Date(`${req.body.paymentDate}T12:00:00+03:00`),
+        now = Date.now();
+      if (
+        !Number.isFinite(paymentDate.getTime()) ||
+        paymentDate.getTime() > now + 5 * 60_000 ||
+        paymentDate.getTime() < now - 31 * 24 * 60 * 60_000
+      )
+        return res.status(400).json({
+          success: false,
+          message: 'Payment date must be within the last 31 days and cannot be in the future',
+        });
+      const payment = await transaction(async (client) => {
+        const loan = (
+          await client.query<{ id: string }>(
+            `SELECT id FROM loans WHERE id=$1 AND user_id=$2
+             AND status IN ('ACTIVE','DEFAULTED') FOR UPDATE`,
+            [req.body.loanId, userId(req)],
+          )
+        ).rows[0];
+        if (!loan) return { error: 'LOAN_NOT_FOUND' } as const;
+        const balance = (
+          await client.query<{ available: string }>(
+            `SELECT GREATEST(
+             l.total_amount_payable
+             - COALESCE((SELECT SUM(p.payment_amount) FROM payments p
+               WHERE p.loan_id=l.id AND p.payment_status='COMPLETED'),0)
+             - COALESCE((SELECT SUM(p.payment_amount) FROM payments p
+               WHERE p.loan_id=l.id AND p.payment_status IN ('PENDING','PROCESSING')),0)
+             ,0) AS available
+             FROM loans l WHERE l.id=$1`,
+            [loan.id],
+          )
+        ).rows[0];
+        if (amount > Number(balance.available) + 0.005)
+          return { error: 'AMOUNT_EXCEEDS_BALANCE', available: Number(balance.available) } as const;
+        const schedule = (
+          await client.query<{ id: string }>(
+            `SELECT id FROM repayment_schedules
+             WHERE loan_id=$1 AND status NOT IN ('PAID','WAIVED')
+             AND total_due+late_fee-amount_paid>0
+             ORDER BY sequence_number LIMIT 1`,
+            [loan.id],
+          )
+        ).rows[0];
+        if (!schedule) return { error: 'NO_PAYMENT_DUE' } as const;
+        const row = (
+          await client.query(
+            `INSERT INTO payments(
+             loan_id,repayment_schedule_id,user_id,payment_amount,payment_method,
+             transaction_reference,payment_status,payment_date,notes
+             ) VALUES($1,$2,$3,$4,$5,$6,'PENDING',$7,'Customer-submitted external repayment awaiting verification')
+             RETURNING id,payment_amount AS amount,payment_method AS method,
+             transaction_reference AS reference,payment_status AS status,payment_date AS "paymentDate"`,
+            [loan.id, schedule.id, userId(req), amount, req.body.method, reference, paymentDate],
+          )
+        ).rows[0];
+        return { row } as const;
+      });
+      if ('error' in payment) {
+        if (payment.error === 'AMOUNT_EXCEEDS_BALANCE')
+          return res.status(409).json({
+            success: false,
+            message: `Payment exceeds the available balance of KES ${payment.available.toLocaleString(
+              'en-KE',
+            )}`,
+          });
+        return res.status(409).json({
+          success: false,
+          message:
+            payment.error === 'NO_PAYMENT_DUE'
+              ? 'This loan has no unpaid instalment'
+              : 'Only your active or overdue loans can receive payments',
+        });
+      }
+      await audit(req, 'REPAYMENT_SUBMITTED', 'payment', String(payment.row.id));
+      return res.status(201).json({
+        success: true,
+        data: payment.row,
+        message: 'Payment submitted for verification',
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 router.get('/payments', requireAuth, async (req: AuthRequest, res, next) => {
   try {
     const rows = await query(
-      'SELECT id,payment_amount AS amount,currency,payment_method AS method,transaction_reference AS reference,payment_status AS status,payment_date AS "paymentDate" FROM payments WHERE user_id=$1 ORDER BY payment_date DESC',
+      `SELECT p.id,p.loan_id AS "loanId",l.loan_number AS "loanNumber",
+       p.payment_amount AS amount,p.currency,p.payment_method AS method,
+       p.transaction_reference AS reference,p.payment_status AS status,
+       p.payment_date AS "paymentDate",p.failure_reason AS "failureReason"
+       FROM payments p JOIN loans l ON l.id=p.loan_id
+       WHERE p.user_id=$1 ORDER BY p.payment_date DESC`,
       [userId(req)],
     );
     return res.json({ success: true, data: rows });

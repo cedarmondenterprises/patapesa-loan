@@ -335,6 +335,135 @@ router.get('/ledger', requirePermission('ledger:view'), async (_req, res, next) 
   }
 });
 
+router.get('/payments', requirePermission('payments:review'), async (_req, res, next) => {
+  try {
+    const rows = await query(
+      `SELECT p.id,p.payment_amount AS amount,p.payment_method AS method,
+       p.transaction_reference AS reference,p.payment_status AS status,
+       p.payment_date AS "paymentDate",p.created_at AS "submittedAt",
+       p.failure_reason AS "failureReason",l.loan_number AS "loanNumber",
+       rs.sequence_number AS instalment,u.first_name AS "firstName",
+       u.last_name AS "lastName",u.email
+       FROM payments p JOIN loans l ON l.id=p.loan_id
+       JOIN users u ON u.id=p.user_id
+       LEFT JOIN repayment_schedules rs ON rs.id=p.repayment_schedule_id
+       ORDER BY CASE WHEN p.payment_status IN ('PENDING','PROCESSING') THEN 0 ELSE 1 END,
+       p.created_at DESC LIMIT 500`,
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch(
+  '/payments/:id',
+  requirePermission('payments:review'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const id = idParam(req),
+        status = String(req.body.status || '').toUpperCase(),
+        reason = String(req.body.reason || '').trim();
+      if (!validUuid(id) || !['COMPLETED', 'FAILED'].includes(status))
+        return res.status(400).json({ success: false, message: 'Invalid payment decision' });
+      if (status === 'FAILED' && (reason.length < 3 || reason.length > 1000))
+        return res.status(400).json({
+          success: false,
+          message: 'Provide a clear reason for rejecting this payment',
+        });
+      const result = await transaction(async (client) => {
+        const payment = (
+          await client.query<{
+            id: string;
+            loan_id: string;
+            payment_amount: string;
+          }>(
+            `SELECT id,loan_id,payment_amount FROM payments
+             WHERE id=$1 AND payment_status IN ('PENDING','PROCESSING') FOR UPDATE`,
+            [id],
+          )
+        ).rows[0];
+        if (!payment) return { error: 'NOT_PENDING' } as const;
+        if (status === 'FAILED') {
+          await client.query(
+            `UPDATE payments SET payment_status='FAILED',failure_reason=$1,
+             confirmed_date=NOW(),updated_at=NOW() WHERE id=$2`,
+            [reason, id],
+          );
+          return { paymentId: id, status } as const;
+        }
+        const schedules = (
+          await client.query<{
+            id: string;
+            amount_paid: string;
+            remaining: string;
+          }>(
+            `SELECT id,amount_paid,
+             GREATEST(total_due+late_fee-amount_paid,0) AS remaining
+             FROM repayment_schedules WHERE loan_id=$1
+             AND status NOT IN ('PAID','WAIVED')
+             ORDER BY sequence_number FOR UPDATE`,
+            [payment.loan_id],
+          )
+        ).rows;
+        const currentBalance = schedules.reduce((sum, row) => sum + Number(row.remaining), 0),
+          amount = Number(payment.payment_amount);
+        if (amount > currentBalance + 0.005)
+          return { error: 'AMOUNT_EXCEEDS_BALANCE', balance: currentBalance } as const;
+        let unallocated = amount;
+        for (const schedule of schedules) {
+          if (unallocated <= 0.004) break;
+          const applied = Math.min(unallocated, Number(schedule.remaining)),
+            newPaid = Math.round((Number(schedule.amount_paid) + applied) * 100) / 100,
+            paid = applied >= Number(schedule.remaining) - 0.004;
+          await client.query(
+            `UPDATE repayment_schedules SET amount_paid=$1,status=$2,
+             paid_date=CASE WHEN $4::boolean THEN NOW() ELSE paid_date END,updated_at=NOW()
+             WHERE id=$3`,
+            [newPaid, paid ? 'PAID' : 'PARTIALLY_PAID', schedule.id, paid],
+          );
+          unallocated = Math.round((unallocated - applied) * 100) / 100;
+        }
+        await client.query(
+          `UPDATE payments SET payment_status='COMPLETED',failure_reason=NULL,
+           confirmed_date=NOW(),updated_at=NOW() WHERE id=$1`,
+          [id],
+        );
+        if (amount >= currentBalance - 0.004)
+          await client.query(
+            `UPDATE loans SET status='COMPLETED',next_payment_date=NULL,updated_at=NOW()
+             WHERE id=$1`,
+            [payment.loan_id],
+          );
+        return { paymentId: id, status } as const;
+      });
+      if ('error' in result)
+        return res.status(409).json({
+          success: false,
+          message:
+            result.error === 'AMOUNT_EXCEEDS_BALANCE'
+              ? `Payment exceeds the current loan balance of KES ${result.balance.toLocaleString(
+                  'en-KE',
+                )}`
+              : 'This payment has already been reviewed',
+        });
+      await record(
+        req,
+        status === 'COMPLETED' ? 'REPAYMENT_CONFIRMED' : 'REPAYMENT_REJECTED',
+        'payment',
+        id,
+      );
+      return res.json({
+        success: true,
+        data: result,
+        message: status === 'COMPLETED' ? 'Payment confirmed' : 'Payment rejected',
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 router.get('/products', requirePermission('products:manage'), async (_req, res, next) => {
   try {
     const rows = await query(

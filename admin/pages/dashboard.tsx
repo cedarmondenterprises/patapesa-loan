@@ -16,7 +16,10 @@ type Dialog = {
 };
 const groups = [
   { label: 'Workspace', items: ['Overview', 'Registrations', 'Users & roles'] },
-  { label: 'Lending', items: ['Loan review', 'KYC review', 'Loan products', 'Loan ledger'] },
+  {
+    label: 'Lending',
+    items: ['Loan review', 'KYC review', 'Repayments', 'Loan products', 'Loan ledger'],
+  },
   { label: 'Operations', items: ['Support', 'Tracking & ads', 'Audit'] },
 ];
 const permissionFor: Record<string, string> = {
@@ -25,6 +28,7 @@ const permissionFor: Record<string, string> = {
   'Users & roles': 'users:view',
   'Loan review': 'loans:review',
   'KYC review': 'kyc:review',
+  Repayments: 'payments:review',
   'Loan products': 'products:manage',
   'Loan ledger': 'ledger:view',
   Support: 'support:manage',
@@ -75,6 +79,7 @@ export default function Dashboard() {
     [users, setUsers] = useState<Row[]>([]),
     [apps, setApps] = useState<Row[]>([]),
     [kyc, setKyc] = useState<Row[]>([]),
+    [payments, setPayments] = useState<Row[]>([]),
     [ledger, setLedger] = useState<Row[]>([]),
     [products, setProducts] = useState<Row[]>([]),
     [support, setSupport] = useState<Row[]>([]),
@@ -103,18 +108,20 @@ export default function Dashboard() {
       setRoles(me.data.roles);
       setPermissions(currentPermissions);
       const allowed = (permission: string) => currentPermissions.includes(permission);
-      const [m, u, a, k, p] = await Promise.all([
+      const [m, u, a, k, p, repayments] = await Promise.all([
         allowed('dashboard:view') ? safe('/admin/dashboard') : null,
         allowed('users:view') ? safe('/admin/users') : null,
         allowed('loans:review') ? safe('/admin/applications') : null,
         allowed('kyc:review') ? safe('/admin/kyc') : null,
         allowed('products:manage') ? safe('/admin/products') : null,
+        allowed('payments:review') ? safe('/admin/payments') : null,
       ]);
       if (m) setMetrics(m as Metrics);
       if (u) setUsers(u as Row[]);
       if (a) setApps(a as Row[]);
       if (k) setKyc(k as Row[]);
       if (p) setProducts(p as Row[]);
+      if (repayments) setPayments(repayments as Row[]);
       if (!background) {
         const [l, s, ad, integrationsData, au] = await Promise.all([
           allowed('ledger:view') ? safe('/admin/ledger') : null,
@@ -228,6 +235,21 @@ export default function Dashboard() {
     () => kyc.filter((row) => matches(row, query, ['firstName', 'lastName', 'email', 'idType'])),
     [kyc, query],
   );
+  const filteredPayments = useMemo(
+    () =>
+      payments.filter((row) =>
+        matches(row, query, [
+          'reference',
+          'loanNumber',
+          'firstName',
+          'lastName',
+          'email',
+          'method',
+          'status',
+        ]),
+      ),
+    [payments, query],
+  );
   const filteredSupport = useMemo(
     () =>
       support.filter((row) =>
@@ -239,6 +261,9 @@ export default function Dashboard() {
     Registrations: users.filter((u) => u.registrationReference).length,
     'Loan review': apps.length,
     'KYC review': kyc.length,
+    Repayments: payments.filter((payment) =>
+      ['PENDING', 'PROCESSING'].includes(String(payment.status)),
+    ).length,
     Support: support.filter((s) => ['OPEN', 'IN_PROGRESS'].includes(String(s.status))).length,
   };
   function exportCsv() {
@@ -659,6 +684,82 @@ export default function Dashboard() {
                   act(`/admin/products/${id}`, 'PATCH', body, 'Loan product updated')
                 }
               />
+            )}
+            {tab === 'Repayments' && (
+              <>
+                <Toolbar
+                  value={query}
+                  setValue={setQuery}
+                  placeholder="Search payment references, loans or customers"
+                />
+                <Table
+                  heads={['Reference', 'Customer', 'Loan', 'Payment', 'Status', 'Verification']}
+                  rows={filteredPayments.map((payment) => [
+                    `${payment.reference}\nPaid ${date(payment.paymentDate)}`,
+                    <Person row={payment} key="p" />,
+                    `${payment.loanNumber}\nInstalment #${payment.instalment || '—'}`,
+                    `${money(payment.amount)}\n${String(payment.method).replaceAll('_', ' ')}\nSubmitted ${date(
+                      payment.submittedAt,
+                    )}`,
+                    <div key="status">
+                      <Status value={payment.status} />
+                      {payment.failureReason && (
+                        <small className="decision-blockers">{payment.failureReason}</small>
+                      )}
+                    </div>,
+                    <div className="actions" key="actions">
+                      {['PENDING', 'PROCESSING'].includes(String(payment.status)) ? (
+                        <>
+                          <button
+                            className="approve"
+                            onClick={() =>
+                              ask({
+                                title: 'Confirm this repayment?',
+                                copy: `Confirm only after matching reference ${payment.reference} and ${money(
+                                  payment.amount,
+                                )} against the external payment statement. This will update the loan balance and repayment schedule.`,
+                                label: 'Confirm payment',
+                                run: () =>
+                                  act(
+                                    `/admin/payments/${payment.id}`,
+                                    'PATCH',
+                                    { status: 'COMPLETED' },
+                                    'Payment confirmed and loan balance updated',
+                                  ),
+                              })
+                            }
+                          >
+                            Confirm payment
+                          </button>
+                          <button
+                            className="danger"
+                            onClick={() =>
+                              ask({
+                                title: 'Reject this payment record?',
+                                copy: 'Provide the reason the receipt could not be verified. The customer will see it in payment history.',
+                                label: 'Reject payment',
+                                danger: true,
+                                reason: true,
+                                run: (reason) =>
+                                  act(
+                                    `/admin/payments/${payment.id}`,
+                                    'PATCH',
+                                    { status: 'FAILED', reason },
+                                    'Payment rejected',
+                                  ),
+                              })
+                            }
+                          >
+                            Reject payment
+                          </button>
+                        </>
+                      ) : (
+                        <span className="muted">Review completed</span>
+                      )}
+                    </div>,
+                  ])}
+                />
+              </>
             )}
             {tab === 'Loan ledger' && (
               <>
@@ -1281,6 +1382,7 @@ function NavIcon({ name }: { name: string }) {
       'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M18 8l2 2 3-3',
     'Loan review': 'M5 3h14v18H5zM8 8h8M8 12h8M8 16h4',
     'KYC review': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10M9 12l2 2 4-5',
+    Repayments: 'M4 7h16v12H4zM4 11h16M8 15h3M16 4v3M8 4v3',
     'Loan products': 'M4 5h16v14H4zM8 9h8M8 13h5M16 13h1',
     'Loan ledger': 'M4 3h16v18H4zM8 7h8M8 11h8M8 15h3M14 15h2',
     Support: 'M21 15a4 4 0 0 1-4 4H8l-5 3v-7a7 7 0 0 1-1-4 9 9 0 0 1 9-9h1a9 9 0 0 1 9 9z',

@@ -582,6 +582,8 @@ tbody tr:last-child td {
   color: var(--blue);
 }
 .status-rejected,
+.status-failed,
+.status-reversed,
 .status-suspended,
 .status-overdue,
 .status-defaulted {

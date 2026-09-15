@@ -558,8 +558,8 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id ON user_roles(user_id);
 
 INSERT INTO admin_roles(name,description,permissions,status) VALUES
-('SUPER_ADMIN','Full platform administration','["dashboard:view","users:view","users:manage","roles:assign","kyc:review","loans:review","loans:disburse","products:manage","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
-('MANAGER','Operational and financial management','["dashboard:view","users:view","users:manage","kyc:review","loans:review","loans:disburse","products:manage","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
+('SUPER_ADMIN','Full platform administration','["dashboard:view","users:view","users:manage","roles:assign","kyc:review","loans:review","loans:disburse","payments:review","products:manage","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
+('MANAGER','Operational and financial management','["dashboard:view","users:view","users:manage","kyc:review","loans:review","loans:disburse","payments:review","products:manage","ledger:view","support:manage","ads:manage","audit:view"]'::jsonb,'ACTIVE'),
 ('STAFF','Customer registration, identity, loan and support operations','["dashboard:view","users:view","users:manage","kyc:review","loans:review","ledger:view","support:manage"]'::jsonb,'ACTIVE')
 ON CONFLICT(name) DO UPDATE SET description=EXCLUDED.description,permissions=EXCLUDED.permissions,status='ACTIVE',updated_at=NOW();
 
