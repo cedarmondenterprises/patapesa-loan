@@ -17,6 +17,37 @@ const ink = '#18211e';
 const muted = '#66736e';
 const line = '#d9dfdc';
 const paper = '#fffdf7';
+const stampInk = '#b54735';
+
+const stampMonths = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
+];
+
+export function registrationStampDate(generatedAt: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Africa/Nairobi',
+  }).formatToParts(generatedAt);
+  const day = parts.find((part) => part.type === 'day')?.value;
+  const month = Number(parts.find((part) => part.type === 'month')?.value);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  if (!day || !month || !year || !stampMonths[month - 1])
+    throw new Error('Invalid PDF generation date');
+  return `${day} ${stampMonths[month - 1]} ${year}`;
+}
 
 const labels: Record<string, string> = {
   SALARIED: 'Salaried employee',
@@ -67,7 +98,10 @@ export function registrationIdentityRows(record: RegistrationPdfRecord): [string
   ];
 }
 
-export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promise<Buffer> {
+export async function buildRegistrationPdf(
+  record: RegistrationPdfRecord,
+  generatedAt: Date = new Date(),
+): Promise<Buffer> {
   const doc = new PDFDocument({
     size: 'A4',
     margin: 48,
@@ -136,6 +170,7 @@ export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promi
   };
   const a = record.answers;
   const d = record.declarations;
+  const stampDate = registrationStampDate(generatedAt);
 
   doc.fillColor(forest).font('Times-Bold').fontSize(25).text('Borrower registration record');
   doc.moveDown(0.3);
@@ -208,6 +243,7 @@ export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promi
   ];
   declarationRows.forEach(([label, input]) => row(label, input));
 
+  ensure(230);
   section('Administrative review');
   row('Account status at export', record.status);
   doc.moveDown(0.5);
@@ -219,15 +255,68 @@ export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promi
       'Reviewer name: __________________________________    Date: __________________    Signature: __________________',
       { lineGap: 6 },
     );
-  doc.moveDown(1.1);
-  doc.fillColor(ink).font('Helvetica-Bold').fontSize(8).text('CONFIDENTIAL CUSTOMER RECORD');
+  doc.moveDown(1.2);
+
+  const stampTop = doc.y;
+  const stampCenterX = 467;
+  const stampCenterY = stampTop + 51;
+  doc
+    .fillColor(muted)
+    .font('Helvetica')
+    .fontSize(8)
+    .text(
+      `Generated on ${stampDate} (Africa/Nairobi). The stamp confirms when this copy was produced; it does not approve the registration, verify identity, or approve a loan.`,
+      48,
+      stampTop + 14,
+      { width: 315, lineGap: 3 },
+    );
+  doc
+    .save()
+    .opacity(0.88)
+    .rotate(-4, { origin: [stampCenterX, stampCenterY] })
+    .strokeColor(stampInk)
+    .lineWidth(2.2)
+    .circle(stampCenterX, stampCenterY, 48)
+    .stroke()
+    .lineWidth(0.8)
+    .circle(stampCenterX, stampCenterY, 42)
+    .stroke()
+    .fillColor(stampInk)
+    .font('Helvetica-Bold')
+    .fontSize(10)
+    .text('PATAPESA', stampCenterX - 39, stampCenterY - 29, { width: 78, align: 'center' })
+    .fontSize(6.6)
+    .text('SYSTEM-GENERATED', stampCenterX - 42, stampCenterY - 10, {
+      width: 84,
+      align: 'center',
+      characterSpacing: 0.35,
+    })
+    .fontSize(11)
+    .text(stampDate, stampCenterX - 43, stampCenterY + 3, { width: 86, align: 'center' })
+    .fontSize(6.6)
+    .text('REGISTRATION COPY', stampCenterX - 42, stampCenterY + 23, {
+      width: 84,
+      align: 'center',
+      characterSpacing: 0.25,
+    })
+    .restore();
+  doc.x = 48;
+  doc.y = stampTop + 112;
+
+  doc
+    .fillColor(ink)
+    .font('Helvetica-Bold')
+    .fontSize(8)
+    .text('CONFIDENTIAL CUSTOMER RECORD', 48, doc.y, { width: 499 });
   doc
     .fillColor(muted)
     .font('Helvetica')
     .fontSize(8)
     .text(
       'Access is limited to authorised PataPesa staff. This registration record is not a loan approval, credit agreement, or proof of identity verification.',
-      { lineGap: 3 },
+      48,
+      doc.y,
+      { width: 499, lineGap: 3 },
     );
 
   const pages = doc.bufferedPageRange();
