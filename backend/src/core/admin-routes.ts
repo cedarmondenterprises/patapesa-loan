@@ -459,7 +459,7 @@ router.post(
             Number(app.processing_fee || 0);
         const row = (
           await client.query<{ id: string }>(
-            `INSERT INTO loans(application_id,user_id,loan_number,principal_amount,total_interest,processing_fee,total_amount_payable,interest_rate,loan_term,payment_frequency,disbursement_date,maturity_date) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'MONTHLY',NOW(),(CURRENT_DATE+$9*INTERVAL '1 month')::date) RETURNING id`,
+            `INSERT INTO loans(application_id,user_id,loan_number,principal_amount,total_interest,processing_fee,total_amount_payable,interest_rate,loan_term,payment_frequency,disbursement_date,maturity_date) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'MONTHLY',NOW(),(CURRENT_DATE+$10::integer*INTERVAL '1 month')::date) RETURNING id`,
             [
               app.id,
               app.user_id,
@@ -469,6 +469,7 @@ router.post(
               app.processing_fee || 0,
               app.total_amount_payable,
               app.interest_rate,
+              app.loan_term,
               app.loan_term,
             ],
           )
@@ -489,8 +490,8 @@ router.post(
             feeDue = final ? round(feeTotal - allocatedFee) : feePart,
             totalDue = round(principalDue + interestDue + feeDue);
           await client.query(
-            `INSERT INTO repayment_schedules(loan_id,sequence_number,due_date,principal_amount,interest_amount,fee_amount,total_due) VALUES($1,$2,(CURRENT_DATE+$2*INTERVAL '1 month')::date,$3,$4,$5,$6)`,
-            [row.id, i, principalDue, interestDue, feeDue, totalDue],
+            `INSERT INTO repayment_schedules(loan_id,sequence_number,due_date,principal_amount,interest_amount,fee_amount,total_due) VALUES($1,$2,(CURRENT_DATE+$7::integer*INTERVAL '1 month')::date,$3,$4,$5,$6)`,
+            [row.id, i, principalDue, interestDue, feeDue, totalDue, i],
           );
           allocatedPrincipal = round(allocatedPrincipal + principalDue);
           allocatedInterest = round(allocatedInterest + interestDue);

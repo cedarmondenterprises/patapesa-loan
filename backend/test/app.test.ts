@@ -417,13 +417,7 @@ describe('API security and authentication surface', () => {
     expect(response.body.data.status).toBe('APPROVED');
     expect(queryMock.mock.calls[3][0]).toContain("status IN ('SUBMITTED','UNDER_REVIEW')");
     expect(queryMock.mock.calls[3][0]).toContain('$5::boolean');
-    expect(queryMock.mock.calls[3][1]).toEqual([
-      'APPROVED',
-      null,
-      id,
-      applicationId,
-      true,
-    ]);
+    expect(queryMock.mock.calls[3][1]).toEqual(['APPROVED', null, id, applicationId, true]);
   });
 
   it('rejects a loan with a reason without reusing the status SQL parameter', async () => {
@@ -483,6 +477,48 @@ describe('API security and authentication surface', () => {
     expect(response.status).toBe(200);
     expect(response.body.message).toBe('Loan product updated');
     expect(queryMock.mock.calls[2][0]).toContain('UPDATE loan_products');
+  });
+
+  it('records disbursement dates without reusing typed SQL parameters', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const applicationId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const loanId = '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2';
+    const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: applicationId,
+            user_id: '48d7377b-b92c-4710-862f-a876850234c9',
+            loan_amount: '1000',
+            loan_term: 2,
+            interest_rate: '12',
+            processing_fee: '20',
+            total_amount_payable: '1120',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [{ id: loanId }] })
+      .mockResolvedValue({ rows: [] });
+    transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'manager@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([]);
+
+    const response = await request(app)
+      .post(`/api/admin/applications/${applicationId}/disburse`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`);
+
+    expect(response.status).toBe(201);
+    expect(response.body.message).toBe('Loan recorded as disbursed');
+    expect(clientQuery.mock.calls[1][0]).toContain('$10::integer');
+    expect(clientQuery.mock.calls[1][1]).toHaveLength(10);
+    expect(clientQuery.mock.calls[2][0]).toContain('$7::integer');
+    expect(clientQuery.mock.calls[2][1]).toEqual([loanId, 1, 500, 50, 10, 560, 1]);
+    expect(clientQuery.mock.calls[3][1]).toEqual([loanId, 2, 500, 50, 10, 560, 2]);
   });
 
   it('allows an advertising manager to save a disabled placement', async () => {
