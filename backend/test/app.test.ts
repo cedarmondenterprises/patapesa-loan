@@ -416,6 +416,42 @@ describe('API security and authentication surface', () => {
     expect(response.status).toBe(200);
     expect(response.body.data.status).toBe('APPROVED');
     expect(queryMock.mock.calls[3][0]).toContain("status IN ('SUBMITTED','UNDER_REVIEW')");
+    expect(queryMock.mock.calls[3][0]).toContain('$5::boolean');
+    expect(queryMock.mock.calls[3][1]).toEqual([
+      'APPROVED',
+      null,
+      id,
+      applicationId,
+      true,
+    ]);
+  });
+
+  it('rejects a loan with a reason without reusing the status SQL parameter', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const applicationId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const token = createToken({ id, email: 'staff@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([
+        { id: applicationId, applicationNumber: 'PPL-TEST', status: 'REJECTED' },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .patch(`/api/admin/applications/${applicationId}`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({ status: 'REJECTED', reason: 'Applicant does not meet the minimum age requirement' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.status).toBe('REJECTED');
+    expect(queryMock.mock.calls[2][0]).toContain('$5::boolean');
+    expect(queryMock.mock.calls[2][1]).toEqual([
+      'REJECTED',
+      'Applicant does not meet the minimum age requirement',
+      id,
+      applicationId,
+      false,
+    ]);
   });
 
   it('lets a product manager update customer-facing lending limits', async () => {

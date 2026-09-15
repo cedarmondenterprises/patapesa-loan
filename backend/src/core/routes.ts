@@ -943,13 +943,14 @@ router.patch(
       const row = (
         await query(
           `UPDATE loan_applications SET status=$1,rejection_reason=$2,reviewed_by=$3,reviewed_at=NOW(),
-      approval_date=CASE WHEN $1='APPROVED' THEN NOW() ELSE approval_date END,updated_at=NOW()
+      approval_date=CASE WHEN $5::boolean THEN NOW() ELSE approval_date END,updated_at=NOW()
       WHERE id=$4 AND status IN ('SUBMITTED','UNDER_REVIEW') RETURNING id,application_number AS "applicationNumber",status`,
           [
             req.body.status,
             req.body.status === 'REJECTED' ? req.body.reason : null,
             userId(req),
             req.params.id,
+            req.body.status === 'APPROVED',
           ],
         )
       )[0] as { id: string } | undefined;
