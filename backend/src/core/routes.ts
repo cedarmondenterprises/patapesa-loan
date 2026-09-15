@@ -382,10 +382,17 @@ router.post(
       )[0];
       if (!user || !(await bcrypt.compare(req.body.password, user.password_hash)))
         return res.status(401).json({ success: false, message: 'Invalid email or password' });
-      if (user.status !== 'ACTIVE')
-        return res
-          .status(403)
-          .json({ success: false, message: 'This account is not active. Contact support.' });
+      if (user.status !== 'ACTIVE') {
+        const statusMessages: Record<string, string> = {
+          PENDING: 'Your account setup is still pending. Contact support if this does not resolve.',
+          SUSPENDED: 'Your account is suspended. Contact support for assistance.',
+          REJECTED: 'Your account access has been disabled. Contact support for assistance.',
+        };
+        return res.status(403).json({
+          success: false,
+          message: statusMessages[user.status] || 'This account is not active. Contact support.',
+        });
+      }
       await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
       setAuthCookie(
         res,

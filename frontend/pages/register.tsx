@@ -2,7 +2,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import AuthShell from '../components/AuthShell';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
 type FormState = {
   firstName: string;
@@ -115,6 +115,7 @@ export default function Register() {
   const [message, setMessage] = useState('');
   const [reference, setReference] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [showLoginRecovery, setShowLoginRecovery] = useState(false);
   const [loading, setLoading] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const dobLimits = useMemo(() => {
@@ -185,6 +186,7 @@ export default function Register() {
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage('');
+    setShowLoginRecovery(false);
     if (form.password !== form.confirm) return setMessage('Passwords do not match');
     if (!checks.every(Boolean))
       return setMessage('Your password does not meet every security requirement');
@@ -205,11 +207,35 @@ export default function Register() {
       );
       setMessage(result.message);
       setReference(result.data.registrationReference);
-      setSubmitted(true);
       sessionStorage.removeItem(draftKey);
-      await router.push('/dashboard');
+      try {
+        await api('/auth/me');
+        const navigated = await router.replace({
+          pathname: '/dashboard',
+          query: { welcome: 'registered' },
+        });
+        if (!navigated) throw new Error('Navigation was interrupted');
+      } catch {
+        setSubmitted(true);
+        setShowLoginRecovery(true);
+        setMessage(
+          `${result.message} Your account was created, but the new session could not be confirmed. Sign in to continue.`,
+        );
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Registration failed');
+      if (error instanceof ApiError && error.status === 409) {
+        setMessage(
+          `${error.message} If you previously submitted this form, sign in instead of submitting it again.`,
+        );
+        setShowLoginRecovery(true);
+      } else if (error instanceof ApiError && error.status === 0) {
+        setMessage(
+          'We could not confirm whether your registration was received. Do not submit it repeatedly; first try signing in with the details you entered.',
+        );
+        setShowLoginRecovery(true);
+      } else {
+        setMessage(error instanceof Error ? error.message : 'Registration failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -240,9 +266,18 @@ export default function Register() {
               Keep this reference. Staff can use it to locate your original registration record.
             </p>
           </div>
-          <Link href="/dashboard" className="button button-primary mt-7 w-full">
-            Continue to my account
-          </Link>
+          {showLoginRecovery ? (
+            <Link
+              href={{ pathname: '/login', query: { registered: '1', next: '/dashboard' } }}
+              className="button button-primary mt-7 w-full"
+            >
+              Sign in to continue
+            </Link>
+          ) : (
+            <Link href="/dashboard" className="button button-primary mt-7 w-full">
+              Continue to my account
+            </Link>
+          )}
         </div>
       ) : (
         <>
@@ -271,6 +306,14 @@ export default function Register() {
             <p role="alert" className="notice notice-error mt-6">
               {message}
             </p>
+          )}
+          {showLoginRecovery && (
+            <Link
+              href={{ pathname: '/login', query: { registered: '1', next: '/dashboard' } }}
+              className="mt-3 inline-flex font-bold text-pata-700 underline underline-offset-4"
+            >
+              Go to secure sign in
+            </Link>
           )}
           <form onSubmit={submit} className="registration-form">
             {step === 0 && (

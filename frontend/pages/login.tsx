@@ -2,25 +2,50 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import AuthShell from '../components/AuthShell';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
+
+function loginErrorMessage(error: unknown): string {
+  if (!(error instanceof ApiError))
+    return error instanceof Error ? error.message : 'Sign in failed. Please try again.';
+  if (error.status === 400) return 'Enter a valid email address and your password.';
+  if (error.status === 401) return 'The email address or password is incorrect.';
+  if (error.status === 429) return 'Too many sign-in attempts. Wait a few minutes and try again.';
+  return error.message;
+}
+
+const authenticationPages = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
+function safeDestination(value: string | string[] | undefined): string {
+  const requested = typeof value === 'string' ? value : '/dashboard';
+  const path = requested.split('?')[0];
+  return requested.startsWith('/') && !requested.startsWith('//') && !authenticationPages.has(path)
+    ? requested
+    : '/dashboard';
+}
 
 export default function Login() {
   const router = useRouter(),
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
+    [checkingSession, setCheckingSession] = useState(true),
     [show, setShow] = useState(false);
   const destination = useMemo(() => {
-    const requested = typeof router.query.next === 'string' ? router.query.next : '/dashboard';
-    return requested.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
+    return safeDestination(router.query.next);
   }, [router.query.next]);
   useEffect(() => {
     if (!router.isReady) return;
+    let active = true;
     api('/auth/me')
       .then(() => router.replace(destination))
-      .catch(() => undefined);
+      .catch(() => {
+        if (active) setCheckingSession(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [destination, router]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (checkingSession || loading) return;
     setLoading(true);
     setMessage('');
     const form = new FormData(e.currentTarget);
@@ -28,14 +53,17 @@ export default function Login() {
       await api('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
-          email: form.get('email'),
+          email: String(form.get('email') || '')
+            .trim()
+            .toLowerCase(),
           password: form.get('password'),
           remember: form.get('remember') === 'on',
         }),
       });
+      await api('/auth/me');
       await router.replace(destination);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Sign in failed');
+      setMessage(loginErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -50,6 +78,11 @@ export default function Login() {
       <p className="eyebrow">Customer sign in</p>
       <h2 className="mt-3 text-3xl font-bold tracking-[-.025em] text-pata-950">Welcome back</h2>
       <p className="mt-2 text-sm text-slate-500">Enter the details used when you registered.</p>
+      {router.query.registered === '1' && !message && (
+        <p role="status" className="notice notice-success mt-6">
+          Registration completed. Sign in to continue to your account.
+        </p>
+      )}
       {message && (
         <p role="alert" className="notice notice-error mt-6">
           {message}
@@ -62,6 +95,7 @@ export default function Login() {
             name="email"
             type="email"
             required
+            disabled={checkingSession || loading}
             autoComplete="email"
             placeholder="name@example.com"
           />
@@ -73,6 +107,7 @@ export default function Login() {
               name="password"
               type={show ? 'text' : 'password'}
               required
+              disabled={checkingSession || loading}
               autoComplete="current-password"
               className="pr-16"
             />
@@ -89,14 +124,24 @@ export default function Login() {
         </label>
         <div className="flex items-center justify-between">
           <label className="flex gap-2 text-sm text-slate-600">
-            <input name="remember" type="checkbox" defaultChecked /> Keep me signed in
+            <input
+              name="remember"
+              type="checkbox"
+              defaultChecked
+              disabled={checkingSession || loading}
+            />{' '}
+            Keep me signed in
           </label>
           <Link href="/forgot-password" className="text-sm font-bold text-pata-700">
             Forgot password?
           </Link>
         </div>
-        <button disabled={loading} className="button button-primary w-full">
-          {loading ? 'Signing in…' : 'Sign in securely'}
+        <button disabled={checkingSession || loading} className="button button-primary w-full">
+          {checkingSession
+            ? 'Checking your session…'
+            : loading
+              ? 'Signing in…'
+              : 'Sign in securely'}
         </button>
       </form>
       <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">

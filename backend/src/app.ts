@@ -88,14 +88,18 @@ app.use(
       return;
     }
     if (error.code === '23505') {
-      const duplicateApplication = [
-        'idx_loan_applications_request_id',
-      ].includes(error.constraint || '');
+      const duplicateMessages: Record<string, string> = {
+        idx_loan_applications_request_id: 'This loan application has already been received',
+        users_email_key: 'An account with this email address already exists. Sign in instead.',
+        users_phone_key: 'An account with this mobile number already exists. Sign in instead.',
+        idx_kyc_id_number_hash:
+          'An account with this National ID already exists. Sign in or contact support.',
+      };
       res.status(409).json({
         success: false,
-        message: duplicateApplication
-          ? 'This loan application has already been received'
-          : 'That account or identity record already exists',
+        message:
+          duplicateMessages[error.constraint || ''] ||
+          'That account or identity record already exists',
         requestId,
       });
       return;
