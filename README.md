@@ -55,15 +55,18 @@ sudo docker compose exec backend npm run admin:grant -- staff@example.com
 
 That user signs in only at `https://YOUR_ADMIN_DOMAIN`. The customer site has no admin route. Do not share staff accounts.
 
-New registrations are activated automatically after server-side age, contact, profile, and
-declaration validation. Identity verification and affordability review are still required before
-a loan can be approved. The three staff roles are:
+New registrations are activated automatically after server-side age, contact, profile, National
+ID, and declaration validation. The National ID is encrypted, attached to the immutable
+registration record, and placed in the KYC queue automatically; it is never stored in plaintext or
+in the browser draft. Identity verification and affordability review are still required before a
+loan can be approved. Staff can reject either review with a recorded reason. The three staff roles
+are:
 
-| Role | Access |
-| --- | --- |
-| Super Admin | All admin features, including assigning or removing staff roles |
-| Manager | Dashboard, users, registrations, KYC, loans, ledger, support, advertising, and audit |
-| Staff | Day-to-day registration, KYC, loan, ledger, and support workflows |
+| Role        | Access                                                                               |
+| ----------- | ------------------------------------------------------------------------------------ |
+| Super Admin | All admin features, including assigning or removing staff roles                      |
+| Manager     | Dashboard, users, registrations, KYC, loans, ledger, support, advertising, and audit |
+| Staff       | Day-to-day registration, KYC, loan, ledger, and support workflows                    |
 
 The admin portal includes live registration and user queues, account activation/suspension, role
 assignment, KYC review, loan review and disbursement confirmation, portfolio totals, a drill-down

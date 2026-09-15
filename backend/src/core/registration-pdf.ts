@@ -5,6 +5,8 @@ export type RegistrationPdfRecord = {
   formVersion: string;
   submittedAt: string | Date;
   status: string;
+  nationalIdNumber?: string | null;
+  identityStatus?: string | null;
   answers: Record<string, unknown>;
   declarations: Record<string, unknown>;
 };
@@ -51,6 +53,19 @@ const value = (input: unknown): string => {
       .replace(/^./, (x: string) => x.toUpperCase());
   return text;
 };
+
+export function registrationIdentityRows(record: RegistrationPdfRecord): [string, unknown][] {
+  const a = record.answers;
+  return [
+    ['Legal name', `${value(a.firstName)} ${value(a.lastName)}`],
+    ['Date of birth', a.dateOfBirth],
+    ['National ID number', record.nationalIdNumber],
+    ['Identity review status', record.identityStatus],
+    ['Nationality', a.nationality],
+    ['Email address', a.email],
+    ['Mobile number', a.phone],
+  ];
+}
 
 export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promise<Buffer> {
   const doc = new PDFDocument({
@@ -159,11 +174,7 @@ export async function buildRegistrationPdf(record: RegistrationPdfRecord): Promi
   doc.y = summaryY + 63;
 
   section('Applicant identity and contact');
-  row('Legal name', `${value(a.firstName)} ${value(a.lastName)}`);
-  row('Date of birth', a.dateOfBirth);
-  row('Nationality', a.nationality);
-  row('Email address', a.email);
-  row('Mobile number', a.phone);
+  registrationIdentityRows(record).forEach(([label, input]) => row(label, input));
 
   section('Residential address');
   row('Address line 1', a.addressLine1);

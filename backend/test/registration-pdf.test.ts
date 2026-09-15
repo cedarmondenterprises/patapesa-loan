@@ -1,12 +1,29 @@
-import { buildRegistrationPdf } from '../src/core/registration-pdf';
+import { buildRegistrationPdf, registrationIdentityRows } from '../src/core/registration-pdf';
 
 describe('registration PDF', () => {
+  it('includes the authorised National ID and KYC state in its identity section', () => {
+    const rows = registrationIdentityRows({
+      reference: 'PPR-TEST',
+      formVersion: '2026-09-15',
+      submittedAt: '2026-09-15T12:00:00Z',
+      status: 'ACTIVE',
+      nationalIdNumber: '12345678',
+      identityStatus: 'PENDING',
+      answers: { firstName: 'Jane', lastName: 'Doe' },
+      declarations: {},
+    });
+    expect(rows).toContainEqual(['National ID number', '12345678']);
+    expect(rows).toContainEqual(['Identity review status', 'PENDING']);
+  });
+
   it('creates a branded multi-section PDF from a registration snapshot', async () => {
     const pdf = await buildRegistrationPdf({
       reference: 'PPR-20260913-ABC1234567',
       formVersion: '2026-09-13',
       submittedAt: '2026-09-13T12:00:00Z',
       status: 'PENDING',
+      nationalIdNumber: '12345678',
+      identityStatus: 'PENDING',
       answers: {
         firstName: 'Jane',
         lastName: 'Doe',

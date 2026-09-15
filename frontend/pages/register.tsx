@@ -8,6 +8,7 @@ type FormState = {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
+  nationalIdNumber: string;
   nationality: string;
   email: string;
   phone: string;
@@ -39,6 +40,7 @@ const initial: FormState = {
   firstName: '',
   lastName: '',
   dateOfBirth: '',
+  nationalIdNumber: '',
   nationality: 'KEN',
   email: '',
   phone: '',
@@ -151,6 +153,7 @@ export default function Register() {
     if (!draftReady || submitted) return;
     const timeout = window.setTimeout(() => {
       const safeForm: Partial<FormState> = { ...form };
+      delete safeForm.nationalIdNumber;
       delete safeForm.password;
       delete safeForm.confirm;
       delete safeForm.accuracyConfirmed;
@@ -261,8 +264,8 @@ export default function Register() {
             ))}
           </ol>
           <p className="mt-4 text-center text-xs text-slate-500">
-            Your unfinished answers survive a refresh in this browser tab. Passwords and
-            declarations are never saved.
+            Your unfinished answers survive a refresh in this browser tab. National ID, passwords
+            and declarations are never saved in browser storage.
           </p>
           {message && (
             <p role="alert" className="notice notice-error mt-6">
@@ -274,7 +277,7 @@ export default function Register() {
               <>
                 <SectionIntro
                   title="Identity and contact"
-                  copy="Use the legal name that appears on your identity document. Identity-document details are collected later through the protected KYC process."
+                  copy="Use the legal name and National ID number shown on your identity document. The number is encrypted and sent directly into the protected KYC review queue."
                 />
                 <div className="registration-grid">
                   <Field
@@ -308,6 +311,18 @@ export default function Register() {
                     label="Nationality code"
                     maxLength={3}
                     hint="For example KEN."
+                  />
+                  <Field
+                    state={form}
+                    onChange={update}
+                    name="nationalIdNumber"
+                    label="National ID number"
+                    inputMode="numeric"
+                    pattern="[0-9]{6,10}"
+                    minLength={6}
+                    maxLength={10}
+                    autoComplete="off"
+                    hint="6–10 digits. Encrypted before storage and never saved in your browser draft."
                   />
                   <Field
                     state={form}
@@ -489,6 +504,7 @@ export default function Register() {
                     lines={[
                       `${form.firstName} ${form.lastName}`,
                       form.dateOfBirth,
+                      `National ID ending ${form.nationalIdNumber.slice(-4)}`,
                       form.email,
                       form.phone,
                     ]}

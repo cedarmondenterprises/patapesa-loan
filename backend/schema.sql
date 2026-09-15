@@ -100,6 +100,13 @@ CREATE TABLE IF NOT EXISTS registration_submissions (
 CREATE INDEX IF NOT EXISTS idx_registration_submissions_submitted_at
     ON registration_submissions(submitted_at DESC);
 
+-- Preserve the exact identity number supplied with the immutable registration snapshot.
+-- Only ciphertext and the display-safe last four digits are stored.
+ALTER TABLE registration_submissions
+    ADD COLUMN IF NOT EXISTS national_id_ciphertext TEXT;
+ALTER TABLE registration_submissions
+    ADD COLUMN IF NOT EXISTS national_id_last4 VARCHAR(4);
+
 -- Complete adult registrations no longer wait for manual account activation.
 UPDATE users u SET status='ACTIVE',updated_at=NOW()
 WHERE u.status='PENDING'

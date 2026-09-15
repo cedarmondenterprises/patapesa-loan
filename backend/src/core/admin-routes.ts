@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { Router } from 'express';
 import { AuthRequest, requireAuth } from './auth';
+import { config } from './config';
 import { query, transaction } from './db';
 import { requirePermission } from './permissions';
 import { buildRegistrationPdf, RegistrationPdfRecord } from './registration-pdf';
+import { decryptSensitive } from './security';
 
 const router = Router();
 router.use(requireAuth);
@@ -36,7 +38,11 @@ const extractIntegrationId = (provider: IntegrationProvider, value: unknown): st
   if (!id) return null;
   if (provider === 'GOOGLE_ADSENSE') return id.toLowerCase();
   if (provider !== 'PLAUSIBLE') return id.toUpperCase();
-  const hostname = id.toLowerCase().replace(/^https?:\/\//, '').split('/')[0].replace(/\.$/, '');
+  const hostname = id
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]
+    .replace(/\.$/, '');
   return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)
     ? hostname
     : null;
@@ -122,24 +128,48 @@ router.get('/users', requirePermission('users:view'), async (req, res, next) => 
   }
 });
 
-async function registrationRecord(id: string): Promise<RegistrationPdfRecord | null> {
+async function registrationRecord(
+  id: string,
+  includeNationalId = false,
+): Promise<RegistrationPdfRecord | null> {
   const row = (
     await query<{
       reference: string;
       formVersion: string;
       submittedAt: string;
       status: string;
+      identityStatus: string | null;
+      idNumberCiphertext: string | null;
+      legacyIdNumber: string | null;
       answers: Record<string, unknown>;
       declarations: Record<string, unknown>;
     }>(
       `SELECT rs.reference,rs.form_version AS "formVersion",rs.submitted_at AS "submittedAt",
-       u.status,rs.answers,rs.declarations
+       u.status,rs.answers,rs.declarations,k.verification_status AS "identityStatus",
+       COALESCE(rs.national_id_ciphertext,k.id_number_ciphertext) AS "idNumberCiphertext",
+       k.id_number AS "legacyIdNumber"
        FROM registration_submissions rs JOIN users u ON u.id=rs.user_id
+       LEFT JOIN kyc_verifications k ON k.user_id=rs.user_id
        WHERE rs.user_id=$1 AND u.deleted_at IS NULL`,
       [id],
     )
   )[0];
-  return row || null;
+  if (!row) return null;
+  const nationalIdNumber = includeNationalId
+    ? row.idNumberCiphertext
+      ? decryptSensitive(row.idNumberCiphertext, config.kycEncryptionKey)
+      : row.legacyIdNumber
+    : null;
+  return {
+    reference: row.reference,
+    formVersion: row.formVersion,
+    submittedAt: row.submittedAt,
+    status: row.status,
+    identityStatus: row.identityStatus,
+    answers: row.answers,
+    declarations: row.declarations,
+    nationalIdNumber,
+  };
 }
 
 router.get(
@@ -163,11 +193,12 @@ router.get(
 router.get(
   '/users/:id/registration.pdf',
   requirePermission('users:view'),
+  requirePermission('kyc:review'),
   async (req: AuthRequest, res, next) => {
     try {
       const id = idParam(req);
       if (!validUuid(id)) return res.status(400).json({ success: false, message: 'Invalid user' });
-      const registration = await registrationRecord(id);
+      const registration = await registrationRecord(id, true);
       if (!registration)
         return res.status(404).json({ success: false, message: 'Registration record not found' });
       const pdf = await buildRegistrationPdf(registration);
@@ -456,15 +487,16 @@ router.put(
     try {
       const provider = String(req.params.provider || '').toUpperCase() as IntegrationProvider;
       if (!integrationProviders.includes(provider))
-        return res.status(400).json({ success: false, message: 'Unsupported integration provider' });
+        return res
+          .status(400)
+          .json({ success: false, message: 'Unsupported integration provider' });
       const publicId = extractIntegrationId(provider, req.body.value ?? req.body.publicId);
       if (!publicId)
         return res.status(400).json({
           success: false,
           message: 'Enter a valid provider ID or an unmodified standard provider snippet',
         });
-      const homeSlot =
-          provider === 'GOOGLE_ADSENSE' ? cleanAdSenseSlot(req.body.homeSlot) : '',
+      const homeSlot = provider === 'GOOGLE_ADSENSE' ? cleanAdSenseSlot(req.body.homeSlot) : '',
         loansSlot = provider === 'GOOGLE_ADSENSE' ? cleanAdSenseSlot(req.body.loansSlot) : '',
         enabled = req.body.enabled === true;
       if (homeSlot === null || loansSlot === null)

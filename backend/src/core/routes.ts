@@ -47,7 +47,7 @@ const userId = (req: AuthRequest): string => {
   if (!req.user) throw Object.assign(new Error('Authentication required'), { status: 401 });
   return req.user.id;
 };
-const registrationVersion = '2026-09-13';
+const registrationVersion = '2026-09-15';
 const employmentTypes = [
   'SALARIED',
   'SELF_EMPLOYED',
@@ -153,6 +153,10 @@ router.post(
         throw new Error('You must be between 18 and 100 years old');
       return true;
     }),
+  body('nationalIdNumber')
+    .customSanitizer((value) => String(value || '').replace(/\s/g, ''))
+    .matches(/^\d{6,10}$/)
+    .withMessage('Enter a valid National ID number using 6–10 digits'),
   body('nationality').trim().isLength({ min: 2, max: 3 }).isAlpha(),
   body('addressLine1').trim().isLength({ min: 5, max: 255 }),
   body('addressLine2').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
@@ -208,6 +212,10 @@ router.post(
         dependants,
       } = req.body;
       const hash = await bcrypt.hash(password, 12);
+      const nationalIdNumber = String(req.body.nationalIdNumber),
+        nationalIdCipher = encryptSensitive(nationalIdNumber, config.kycEncryptionKey),
+        nationalIdHash = blindIndex(nationalIdNumber, config.kycEncryptionKey),
+        nationalIdLast4 = nationalIdNumber.slice(-4);
       const reference = `PPR-${new Date()
         .toISOString()
         .slice(0, 10)
@@ -218,6 +226,7 @@ router.post(
         email,
         phone,
         dateOfBirth,
+        nationalIdLast4,
         nationality: String(nationality).toUpperCase(),
         addressLine1,
         addressLine2: cleanOptional(req.body.addressLine2),
@@ -290,21 +299,34 @@ router.post(
             sourceOfIncome,
           ],
         );
+        const kyc = (
+          await client.query<{ id: string }>(
+            `INSERT INTO kyc_verifications(user_id,id_type,id_number,id_number_ciphertext,id_number_hash,id_number_last4,verification_status)
+             VALUES($1,'NATIONAL_ID',NULL,$2,$3,$4,'PENDING') RETURNING id`,
+            [created.id, nationalIdCipher, nationalIdHash, nationalIdLast4],
+          )
+        ).rows[0];
         await client.query(
-          'INSERT INTO registration_submissions(user_id,reference,form_version,answers,declarations,ip_address,user_agent) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          `INSERT INTO registration_submissions(
+             user_id,reference,form_version,answers,declarations,national_id_ciphertext,
+             national_id_last4,ip_address,user_agent
+           ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
           [
             created.id,
             reference,
             registrationVersion,
             JSON.stringify(answers),
             JSON.stringify(declarations),
+            nationalIdCipher,
+            nationalIdLast4,
             req.ip || null,
             req.get('user-agent')?.slice(0, 1000) || null,
           ],
         );
-        return created;
+        return { ...created, kycId: kyc.id };
       });
       await audit(req, 'ACCOUNT_REGISTERED', 'user', user.id, user.id);
+      await audit(req, 'KYC_SUBMITTED', 'kyc_verification', user.kycId, user.id);
       setAuthCookie(
         res,
         createToken({ id: user.id, email: user.email, authVersion: user.auth_version }),
@@ -312,7 +334,8 @@ router.post(
       );
       return res.status(201).json({
         success: true,
-        message: 'Your account is active. You can now continue to identity verification.',
+        message:
+          'Your account is active and your National ID has been submitted for identity review.',
         data: {
           user: {
             id: user.id,

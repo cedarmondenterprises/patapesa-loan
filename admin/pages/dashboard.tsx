@@ -479,7 +479,7 @@ export default function Dashboard() {
                             className="danger"
                             onClick={() =>
                               ask({
-                                title: 'Reject this application?',
+                                title: 'Reject this loan application?',
                                 copy: 'Provide a clear reason. It will be retained with the application record.',
                                 label: 'Reject application',
                                 danger: true,
@@ -494,7 +494,7 @@ export default function Dashboard() {
                               })
                             }
                           >
-                            Reject
+                            Reject loan
                           </button>
                         </>
                       ) : (

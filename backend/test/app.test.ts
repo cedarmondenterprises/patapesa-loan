@@ -89,9 +89,12 @@ describe('API security and authentication surface', () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb' }],
+      })
       .mockResolvedValueOnce({ rows: [] });
     transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
-    queryMock.mockResolvedValueOnce([]);
+    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
     const response = await request(app)
       .post('/api/auth/register')
       .set('Origin', 'http://localhost:3000')
@@ -101,6 +104,7 @@ describe('API security and authentication surface', () => {
         email: 'user@example.com',
         phone: '+254712345678',
         dateOfBirth: '1992-04-12',
+        nationalIdNumber: '12345678',
         nationality: 'KEN',
         addressLine1: '12 Market Road',
         addressLine2: '',
@@ -130,7 +134,18 @@ describe('API security and authentication surface', () => {
     expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
     expect(response.body.message).toContain('account is active');
     expect(response.body.data.registrationReference).toMatch(/^PPR-/);
-    expect(clientQuery).toHaveBeenCalledTimes(3);
+    expect(clientQuery).toHaveBeenCalledTimes(4);
+    expect(clientQuery.mock.calls[2][0]).toContain('INSERT INTO kyc_verifications');
+    expect(clientQuery.mock.calls[2][1][3]).toBe('5678');
+    const storedAnswers = JSON.parse(String(clientQuery.mock.calls[3][1][3])) as Record<
+      string,
+      unknown
+    >;
+    expect(storedAnswers.nationalIdLast4).toBe('5678');
+    expect(storedAnswers).not.toHaveProperty('nationalIdNumber');
+    expect(clientQuery.mock.calls[3][0]).toContain('national_id_ciphertext');
+    expect(clientQuery.mock.calls[3][1][5]).not.toBe('12345678');
+    expect(clientQuery.mock.calls[3][1][6]).toBe('5678');
   });
 
   it('rejects registration when the date of birth is today', async () => {
@@ -144,6 +159,7 @@ describe('API security and authentication surface', () => {
         email: 'baby@example.com',
         phone: '+254711111111',
         dateOfBirth: today,
+        nationalIdNumber: '87654321',
         nationality: 'KEN',
         addressLine1: '12 Market Road',
         addressLine2: '',
