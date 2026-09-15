@@ -12,11 +12,11 @@ type Dialog = {
   label: string;
   danger?: boolean;
   reason?: boolean;
-  run: (reason: string) => Promise<void>;
+  run: (reason: string) => Promise<boolean>;
 };
 const groups = [
   { label: 'Workspace', items: ['Overview', 'Registrations', 'Users & roles'] },
-  { label: 'Lending', items: ['Loan review', 'KYC review', 'Loan ledger'] },
+  { label: 'Lending', items: ['Loan review', 'KYC review', 'Loan products', 'Loan ledger'] },
   { label: 'Operations', items: ['Support', 'Tracking & ads', 'Audit'] },
 ];
 const permissionFor: Record<string, string> = {
@@ -25,6 +25,7 @@ const permissionFor: Record<string, string> = {
   'Users & roles': 'users:view',
   'Loan review': 'loans:review',
   'KYC review': 'kyc:review',
+  'Loan products': 'products:manage',
   'Loan ledger': 'ledger:view',
   Support: 'support:manage',
   'Tracking & ads': 'ads:manage',
@@ -55,6 +56,17 @@ const queueAge = (value: Row[string]) => {
   const days = Math.floor(hours / 24);
   return `${days}d waiting`;
 };
+const approvalBlockers = (row: Row): string[] =>
+  [
+    row.userStatus !== 'ACTIVE' ? 'Account not active' : '',
+    Number(row.age || 0) < 18 ? 'Age not eligible' : '',
+    row.profileComplete !== true ? 'Profile incomplete' : '',
+    row.declarationAccepted !== true ? 'Declaration missing' : '',
+    Number(row.affordabilityRatio ?? Number.POSITIVE_INFINITY) > 0.5
+      ? 'Affordability above 50%'
+      : '',
+    row.kycStatus !== 'APPROVED' ? `KYC ${String(row.kycStatus || 'not submitted')}` : '',
+  ].filter(Boolean);
 
 export default function Dashboard() {
   const router = useRouter(),
@@ -64,6 +76,7 @@ export default function Dashboard() {
     [apps, setApps] = useState<Row[]>([]),
     [kyc, setKyc] = useState<Row[]>([]),
     [ledger, setLedger] = useState<Row[]>([]),
+    [products, setProducts] = useState<Row[]>([]),
     [support, setSupport] = useState<Row[]>([]),
     [ads, setAds] = useState<Row[]>([]),
     [integrations, setIntegrations] = useState<Row[]>([]),
@@ -90,16 +103,18 @@ export default function Dashboard() {
       setRoles(me.data.roles);
       setPermissions(currentPermissions);
       const allowed = (permission: string) => currentPermissions.includes(permission);
-      const [m, u, a, k] = await Promise.all([
+      const [m, u, a, k, p] = await Promise.all([
         allowed('dashboard:view') ? safe('/admin/dashboard') : null,
         allowed('users:view') ? safe('/admin/users') : null,
         allowed('loans:review') ? safe('/admin/applications') : null,
         allowed('kyc:review') ? safe('/admin/kyc') : null,
+        allowed('products:manage') ? safe('/admin/products') : null,
       ]);
       if (m) setMetrics(m as Metrics);
       if (u) setUsers(u as Row[]);
       if (a) setApps(a as Row[]);
       if (k) setKyc(k as Row[]);
+      if (p) setProducts(p as Row[]);
       if (!background) {
         const [l, s, ad, integrationsData, au] = await Promise.all([
           allowed('ledger:view') ? safe('/admin/ledger') : null,
@@ -147,13 +162,20 @@ export default function Dashboard() {
       if (firstAllowed) setTab(firstAllowed);
     }
   }, [permissions, tab]);
-  async function act(path: string, method: string, body: Row = {}, success = 'Action completed') {
+  async function act(
+    path: string,
+    method: string,
+    body: Row = {},
+    success = 'Action completed',
+  ): Promise<boolean> {
     try {
       await api(path, { method, body: JSON.stringify(body) });
       setMessage(success);
       await load();
+      return true;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Action failed');
+      return false;
     }
   }
   function ask(config: Dialog) {
@@ -422,106 +444,131 @@ export default function Dashboard() {
                 <Toolbar value={query} setValue={setQuery} placeholder="Search loan queue" />
                 <Table
                   heads={['Reference', 'Customer', 'Request', 'Eligibility', 'Status', 'Decision']}
-                  rows={filteredApps.map((a) => [
-                    `${a.applicationNumber}\n${queueAge(a.createdAt)}`,
-                    <Person row={a} key="p" />,
-                    `${a.product} · ${String(a.purposeCategory || 'OTHER').replaceAll(
-                      '_',
-                      ' ',
-                    )}\n${money(a.amount)} · ${a.term} months · ${money(a.monthlyPayment)}/month\n${
-                      a.purpose
-                    }\nRepayment: ${a.repaymentSource || 'Legacy record'}`,
-                    `Age: ${a.age ?? 'Missing'}\nIncome: ${String(
-                      a.incomeRange || 'Missing',
-                    ).replaceAll('_', ' ')}\nExisting debt: ${money(
-                      a.existingMonthlyDebt,
-                    )}\nCommitment ratio: ${(Number(a.affordabilityRatio || 0) * 100).toFixed(
-                      1,
-                    )}%\nKYC: ${String(a.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}`,
-                    <Status value={a.status} key="s" />,
-                    <div className="actions" key="d">
-                      {a.status !== 'APPROVED' ? (
-                        <>
-                          <button
-                            onClick={() =>
-                              void act(
-                                `/admin/applications/${a.id}`,
-                                'PATCH',
-                                { status: 'UNDER_REVIEW' },
-                                'Application moved to review',
-                              )
-                            }
-                          >
-                            Start review
-                          </button>
+                  rows={filteredApps.map((a) => {
+                    const blockers = approvalBlockers(a);
+                    return [
+                      `${a.applicationNumber}\n${queueAge(a.createdAt)}`,
+                      <Person row={a} key="p" />,
+                      `${a.product} · ${String(a.purposeCategory || 'OTHER').replaceAll(
+                        '_',
+                        ' ',
+                      )}\n${money(a.amount)} · ${a.term} months · ${money(a.monthlyPayment)}/month\n${
+                        a.purpose
+                      }\nRepayment: ${a.repaymentSource || 'Legacy record'}`,
+                      `Age: ${a.age ?? 'Missing'}\nIncome: ${String(
+                        a.incomeRange || 'Missing',
+                      ).replaceAll('_', ' ')}\nExisting debt: ${money(
+                        a.existingMonthlyDebt,
+                      )}\nCommitment ratio: ${(Number(a.affordabilityRatio || 0) * 100).toFixed(
+                        1,
+                      )}%\nKYC: ${String(a.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}`,
+                      <Status value={a.status} key="s" />,
+                      <div className="actions" key="d">
+                        {a.status !== 'APPROVED' ? (
+                          <>
+                            {a.status === 'SUBMITTED' && (
+                              <button
+                                onClick={() =>
+                                  void act(
+                                    `/admin/applications/${a.id}`,
+                                    'PATCH',
+                                    { status: 'UNDER_REVIEW' },
+                                    'Application moved to review',
+                                  )
+                                }
+                              >
+                                Start review
+                              </button>
+                            )}
+                            {blockers.length ? (
+                              <>
+                                <button disabled title={blockers.join(' · ')}>
+                                  Approval blocked
+                                </button>
+                                {a.kycStatus !== 'APPROVED' &&
+                                  permissions.includes('kyc:review') && (
+                                    <button
+                                      onClick={() => {
+                                        setTab('KYC review');
+                                        setQuery(String(a.email || ''));
+                                      }}
+                                    >
+                                      Review KYC first
+                                    </button>
+                                  )}
+                                <small className="decision-blockers">{blockers.join(' · ')}</small>
+                              </>
+                            ) : (
+                              <button
+                                className="approve"
+                                onClick={() =>
+                                  ask({
+                                    title: 'Approve this loan application?',
+                                    copy: `Approve ${money(a.amount)} for ${a.firstName} ${
+                                      a.lastName
+                                    }. All recorded eligibility checks have passed.`,
+                                    label: 'Approve application',
+                                    run: () =>
+                                      act(
+                                        `/admin/applications/${a.id}`,
+                                        'PATCH',
+                                        { status: 'APPROVED' },
+                                        'Loan application approved',
+                                      ),
+                                  })
+                                }
+                              >
+                                Approve
+                              </button>
+                            )}
+                            <button
+                              className="danger"
+                              onClick={() =>
+                                ask({
+                                  title: 'Reject this loan application?',
+                                  copy: 'Provide a clear reason. It will be retained with the application record.',
+                                  label: 'Reject application',
+                                  danger: true,
+                                  reason: true,
+                                  run: (r) =>
+                                    act(
+                                      `/admin/applications/${a.id}`,
+                                      'PATCH',
+                                      { status: 'REJECTED', reason: r },
+                                      'Loan application rejected',
+                                    ),
+                                })
+                              }
+                            >
+                              Reject loan
+                            </button>
+                          </>
+                        ) : (
                           <button
                             className="approve"
                             onClick={() =>
                               ask({
-                                title: 'Approve this loan application?',
-                                copy: `Approve ${money(a.amount)} for ${a.firstName} ${
-                                  a.lastName
-                                }. Approved KYC and an active account are required.`,
-                                label: 'Approve application',
+                                title: 'Confirm external disbursement?',
+                                copy: `Only continue after confirming that ${money(
+                                  a.amount,
+                                )} was successfully sent outside PataPesa. This creates the loan ledger and repayment schedule.`,
+                                label: 'Record disbursement',
                                 run: () =>
                                   act(
-                                    `/admin/applications/${a.id}`,
-                                    'PATCH',
-                                    { status: 'APPROVED' },
-                                    'Loan application approved',
+                                    `/admin/applications/${a.id}/disburse`,
+                                    'POST',
+                                    {},
+                                    'Disbursement recorded',
                                   ),
                               })
                             }
                           >
-                            Approve
+                            Record disbursement
                           </button>
-                          <button
-                            className="danger"
-                            onClick={() =>
-                              ask({
-                                title: 'Reject this loan application?',
-                                copy: 'Provide a clear reason. It will be retained with the application record.',
-                                label: 'Reject application',
-                                danger: true,
-                                reason: true,
-                                run: (r) =>
-                                  act(
-                                    `/admin/applications/${a.id}`,
-                                    'PATCH',
-                                    { status: 'REJECTED', reason: r },
-                                    'Loan application rejected',
-                                  ),
-                              })
-                            }
-                          >
-                            Reject loan
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          className="approve"
-                          onClick={() =>
-                            ask({
-                              title: 'Confirm external disbursement?',
-                              copy: `Only continue after confirming that ${money(
-                                a.amount,
-                              )} was successfully sent outside PataPesa. This creates the loan ledger and repayment schedule.`,
-                              label: 'Record disbursement',
-                              run: () =>
-                                act(
-                                  `/admin/applications/${a.id}/disburse`,
-                                  'POST',
-                                  {},
-                                  'Disbursement recorded',
-                                ),
-                            })
-                          }
-                        >
-                          Record disbursement
-                        </button>
-                      )}
-                    </div>,
-                  ])}
+                        )}
+                      </div>,
+                    ];
+                  })}
                 />
               </>
             )}
@@ -604,6 +651,14 @@ export default function Dashboard() {
                   ])}
                 />
               </>
+            )}
+            {tab === 'Loan products' && (
+              <ProductManager
+                products={products}
+                save={(id, body) =>
+                  act(`/admin/products/${id}`, 'PATCH', body, 'Loan product updated')
+                }
+              />
             )}
             {tab === 'Loan ledger' && (
               <>
@@ -712,6 +767,160 @@ export default function Dashboard() {
   );
 }
 
+function ProductManager({
+  products,
+  save,
+}: {
+  products: Row[];
+  save: (id: string, body: Row) => Promise<boolean>;
+}) {
+  return (
+    <div className="product-admin-grid">
+      <div className="product-admin-intro">
+        <p className="overline">Credit catalogue</p>
+        <h2>Loan products</h2>
+        <p>
+          Change the figures customers see and can apply for. Existing applications keep the rate
+          and fees recorded when they were submitted.
+        </p>
+      </div>
+      {products.map((product) => (
+        <form
+          className="product-card"
+          key={String(product.id)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const data = new FormData(event.currentTarget);
+            void save(String(product.id), {
+              name: String(data.get('name') || ''),
+              description: String(data.get('description') || ''),
+              minAmount: Number(data.get('minAmount')),
+              maxAmount: Number(data.get('maxAmount')),
+              minTerm: Number(data.get('minTerm')),
+              maxTerm: Number(data.get('maxTerm')),
+              interestRate: Number(data.get('interestRate')),
+              processingFee: Number(data.get('processingFee')),
+              status: String(data.get('status') || ''),
+            });
+          }}
+        >
+          <div className="product-card-heading">
+            <span>{product.code}</span>
+            <Status value={product.status} />
+          </div>
+          <label>
+            <span>Customer-facing name</span>
+            <input
+              name="name"
+              defaultValue={String(product.name || '')}
+              minLength={2}
+              maxLength={100}
+              required
+            />
+          </label>
+          <label>
+            <span>Description</span>
+            <textarea
+              name="description"
+              defaultValue={String(product.description || '')}
+              minLength={10}
+              maxLength={500}
+              required
+            />
+          </label>
+          <div className="product-fields">
+            <ProductField
+              name="minAmount"
+              label="Minimum amount"
+              value={product.minAmount}
+              min={1000}
+            />
+            <ProductField
+              name="maxAmount"
+              label="Maximum amount"
+              value={product.maxAmount}
+              min={1000}
+            />
+            <ProductField
+              name="minTerm"
+              label="Minimum months"
+              value={product.minTerm}
+              min={1}
+              max={60}
+            />
+            <ProductField
+              name="maxTerm"
+              label="Maximum months"
+              value={product.maxTerm}
+              min={1}
+              max={60}
+            />
+            <ProductField
+              name="interestRate"
+              label="Annual interest %"
+              value={product.interestRate}
+              min={0}
+              max={100}
+              step="0.01"
+            />
+            <ProductField
+              name="processingFee"
+              label="Processing fee %"
+              value={product.processingFee}
+              min={0}
+              max={100}
+              step="0.01"
+            />
+          </div>
+          <div className="product-card-footer">
+            <label>
+              <span>Availability</span>
+              <select name="status" defaultValue={String(product.status || 'INACTIVE')}>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </label>
+            <button className="primary" type="submit">
+              Save product
+            </button>
+          </div>
+        </form>
+      ))}
+    </div>
+  );
+}
+
+function ProductField({
+  name,
+  label,
+  value,
+  min,
+  max,
+  step = '1',
+}: {
+  name: string;
+  label: string;
+  value: Row[string];
+  min: number;
+  max?: number;
+  step?: string;
+}) {
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        name={name}
+        type="number"
+        defaultValue={String(value ?? '')}
+        min={min}
+        max={max}
+        step={step}
+        required
+      />
+    </label>
+  );
+}
+
 function Overview({ metrics, audit }: { metrics: Metrics; audit: Row[] }) {
   const outstanding = Number(metrics.outstanding || 0),
     overdue = Number(metrics.overdue || 0),
@@ -789,8 +998,8 @@ function AdManager({
 }: {
   ads: Row[];
   integrations: Row[];
-  save: (slot: string, body: Row) => Promise<void>;
-  saveIntegration: (provider: string, body: Row) => Promise<void>;
+  save: (slot: string, body: Row) => Promise<boolean>;
+  saveIntegration: (provider: string, body: Row) => Promise<boolean>;
 }) {
   const providers = [
     {
@@ -1072,6 +1281,7 @@ function NavIcon({ name }: { name: string }) {
       'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M18 8l2 2 3-3',
     'Loan review': 'M5 3h14v18H5zM8 8h8M8 12h8M8 16h4',
     'KYC review': 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10M9 12l2 2 4-5',
+    'Loan products': 'M4 5h16v14H4zM8 9h8M8 13h5M16 13h1',
     'Loan ledger': 'M4 3h16v18H4zM8 7h8M8 11h8M8 15h3M14 15h2',
     Support: 'M21 15a4 4 0 0 1-4 4H8l-5 3v-7a7 7 0 0 1-1-4 9 9 0 0 1 9-9h1a9 9 0 0 1 9 9z',
     'Tracking & ads': 'M3 11v2l12 5V6L3 11zM15 9h4l2 2v2l-2 2h-4M6 14l2 7h4l-2-5',
@@ -1177,9 +1387,9 @@ function ActionDialog({ dialog, close }: { dialog: Dialog; close: () => void }) 
   async function confirm() {
     if (dialog.reason && !reason.trim()) return;
     setBusy(true);
-    await dialog.run(reason.trim());
+    const succeeded = await dialog.run(reason.trim());
     setBusy(false);
-    close();
+    if (succeeded) close();
   }
   return (
     <div

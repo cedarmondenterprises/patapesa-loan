@@ -17,6 +17,7 @@ type Application = {
   rejectionReason?: string | null;
   reviewedAt?: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 type Kyc = {
   idType: string;
@@ -88,7 +89,10 @@ export default function Dashboard() {
       })
       .catch((error) => {
         if (error instanceof ApiError && error.status === 401)
-          return router.replace({ pathname: '/login', query: { next: '/dashboard' } });
+          return router.replace({
+            pathname: '/login',
+            query: { next: '/dashboard#application-progress' },
+          });
         setLoadError(error instanceof Error ? error.message : 'Unable to load your account');
       })
       .finally(() => setLoading(false));
@@ -154,12 +158,16 @@ export default function Dashboard() {
             {user?.email} · {user?.phone}
           </p>
         </div>
-        <button
-          onClick={() => void signOut()}
-          className="button button-secondary button-small self-start"
-        >
-          Sign out
-        </button>
+        <div className="flex flex-wrap gap-3 self-start">
+          {latest && (
+            <a href="#application-progress" className="button button-primary button-small">
+              Track application
+            </a>
+          )}
+          <button onClick={() => void signOut()} className="button button-secondary button-small">
+            Sign out
+          </button>
+        </div>
       </header>
       {message && (
         <p
@@ -190,19 +198,19 @@ export default function Dashboard() {
                 ? 'Correct identity details'
                 : 'Verify identity'
               : nextInstallment
-              ? `Pay ${money(nextInstallment.remaining)}`
-              : latest
-              ? latest.status.replace(/_/g, ' ').toLowerCase()
-              : 'Choose a loan'
+                ? `Pay ${money(nextInstallment.remaining)}`
+                : latest
+                  ? latest.status.replace(/_/g, ' ').toLowerCase()
+                  : 'Choose a loan'
           }
           note={
             needsKyc
               ? kyc?.rejectionReason || 'Required before a loan can be approved'
               : nextInstallment
-              ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
-              : latest
-              ? `Application ${latest.applicationNumber}`
-              : 'Compare the full repayment first'
+                ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
+                : latest
+                  ? `Application ${latest.applicationNumber}`
+                  : 'Compare the full repayment first'
           }
         />
         <Summary
@@ -298,7 +306,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="eyebrow">Your activity</p>
-              <h2 className="mt-2 text-2xl font-bold text-pata-950">Loan applications</h2>
+              <h2 className="mt-2 text-2xl font-bold text-pata-950">Application history</h2>
             </div>
             {hasOpenApplication ? (
               <span className="text-sm font-semibold text-slate-500">
@@ -316,7 +324,6 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
                     <th className="pb-3">Reference</th>
-                    <th className="pb-3">Product</th>
                     <th className="pb-3">Amount</th>
                     <th className="pb-3">Submitted</th>
                     <th className="pb-3">Status</th>
@@ -326,7 +333,6 @@ export default function Dashboard() {
                   {apps.map((a) => (
                     <tr className="border-b border-pata-900/10 last:border-0" key={a.id}>
                       <td className="py-5 font-mono text-xs">{a.applicationNumber}</td>
-                      <td className="font-semibold">{a.product}</td>
                       <td>{money(a.amount)}</td>
                       <td>{new Date(a.createdAt).toLocaleDateString('en-KE')}</td>
                       <td>
@@ -340,10 +346,10 @@ export default function Dashboard() {
           ) : (
             <Empty
               title="No applications yet"
-              copy="Compare the available products and calculate the full repayment before submitting."
+              copy="Choose an amount and repayment period when you are ready to apply."
               action={
                 <Link href="/loans" className="text-sm font-bold text-pata-700">
-                  Compare loan products →
+                  Start an application →
                 </Link>
               }
             />
@@ -358,8 +364,8 @@ export default function Dashboard() {
                   ? 'Correct identity details'
                   : 'Verify your identity'
                 : kyc.status === 'PENDING'
-                ? 'Identity review in progress'
-                : 'Identity status'}
+                  ? 'Identity review in progress'
+                  : 'Identity status'}
             </h2>
             {!needsKyc && kyc ? (
               <div className="mt-5">
@@ -458,8 +464,8 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
         kyc?.status === 'APPROVED'
           ? 'Identity verified'
           : kyc?.status === 'PENDING'
-          ? 'Identity check pending'
-          : 'Identity action required',
+            ? 'Identity check pending'
+            : 'Identity action required',
       done: ['UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status),
     },
     {
@@ -482,13 +488,21 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
   ];
   const current = stages.findIndex((stage) => !stage.done);
   return (
-    <section className="surface mt-10 p-6 sm:p-8" aria-labelledby="application-progress-title">
+    <section
+      id="application-progress"
+      className="surface mt-10 scroll-mt-24 p-6 sm:p-8"
+      aria-labelledby="application-progress-title"
+    >
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div>
           <p className="eyebrow">Latest application · {application.applicationNumber}</p>
           <h2 id="application-progress-title" className="mt-2 text-2xl font-bold text-pata-950">
-            Where your application stands
+            Loan application progress
           </h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Last updated{' '}
+            {new Date(application.updatedAt || application.createdAt).toLocaleString('en-KE')}
+          </p>
         </div>
         <StatusBadge status={status} />
       </div>
@@ -501,8 +515,8 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
               stage.done
                 ? 'border-pata-700 bg-pata-50'
                 : index === current
-                ? 'border-copper bg-[#f7f1e7]'
-                : 'border-slate-200 bg-white'
+                  ? 'border-copper bg-[#f7f1e7]'
+                  : 'border-slate-200 bg-white'
             }`}
           >
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">

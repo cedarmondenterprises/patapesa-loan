@@ -335,6 +335,99 @@ router.get('/ledger', requirePermission('ledger:view'), async (_req, res, next) 
   }
 });
 
+router.get('/products', requirePermission('products:manage'), async (_req, res, next) => {
+  try {
+    const rows = await query(
+      `SELECT id,product_code AS code,name,description,min_amount AS "minAmount",
+       max_amount AS "maxAmount",min_term AS "minTerm",max_term AS "maxTerm",
+       interest_rate AS "interestRate",processing_fee AS "processingFee",status
+       FROM loan_products ORDER BY min_amount,product_code`,
+    );
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch(
+  '/products/:id',
+  requirePermission('products:manage'),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const id = idParam(req),
+        name = String(req.body.name || '').trim(),
+        description = String(req.body.description || '').trim(),
+        minAmount = Number(req.body.minAmount),
+        maxAmount = Number(req.body.maxAmount),
+        minTerm = Number(req.body.minTerm),
+        maxTerm = Number(req.body.maxTerm),
+        interestRate = Number(req.body.interestRate),
+        processingFee = Number(req.body.processingFee),
+        status = String(req.body.status || '').toUpperCase();
+      const validNumbers = [
+        minAmount,
+        maxAmount,
+        minTerm,
+        maxTerm,
+        interestRate,
+        processingFee,
+      ].every(Number.isFinite);
+      if (
+        !validUuid(id) ||
+        name.length < 2 ||
+        name.length > 100 ||
+        description.length < 10 ||
+        description.length > 500 ||
+        !validNumbers ||
+        minAmount < 1_000 ||
+        maxAmount < minAmount ||
+        maxAmount > 10_000_000 ||
+        !Number.isInteger(minTerm) ||
+        !Number.isInteger(maxTerm) ||
+        minTerm < 1 ||
+        maxTerm < minTerm ||
+        maxTerm > 60 ||
+        interestRate < 0 ||
+        interestRate > 100 ||
+        processingFee < 0 ||
+        processingFee > 100 ||
+        !['ACTIVE', 'INACTIVE'].includes(status)
+      )
+        return res.status(400).json({
+          success: false,
+          message: 'Check the product name, description, limits, rates, term and status',
+        });
+      const row = (
+        await query(
+          `UPDATE loan_products SET name=$1,description=$2,min_amount=$3,max_amount=$4,
+         min_term=$5,max_term=$6,interest_rate=$7,processing_fee=$8,status=$9,updated_at=NOW()
+         WHERE id=$10 RETURNING id,product_code AS code,name,description,
+         min_amount AS "minAmount",max_amount AS "maxAmount",min_term AS "minTerm",
+         max_term AS "maxTerm",interest_rate AS "interestRate",
+         processing_fee AS "processingFee",status`,
+          [
+            name,
+            description,
+            minAmount,
+            maxAmount,
+            minTerm,
+            maxTerm,
+            interestRate,
+            processingFee,
+            status,
+            id,
+          ],
+        )
+      )[0];
+      if (!row) return res.status(404).json({ success: false, message: 'Loan product not found' });
+      await record(req, 'LOAN_PRODUCT_UPDATED', 'loan_product', id);
+      return res.json({ success: true, data: row, message: 'Loan product updated' });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
 router.post(
   '/applications/:id/disburse',
   requirePermission('loans:disburse'),

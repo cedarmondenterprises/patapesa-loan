@@ -158,6 +158,11 @@ export default function Loans() {
       setMessage(`${r.message}. Your reference is ${r.data.applicationNumber}.`);
       sessionStorage.removeItem(draftKey);
       setSelected(null);
+      const moved = await router.push('/dashboard#application-progress');
+      if (!moved)
+        setMessage(
+          `${r.message}. Your reference is ${r.data.applicationNumber}. Open Track application to follow the review.`,
+        );
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await router.push({ pathname: '/login', query: { next: '/loans' } });

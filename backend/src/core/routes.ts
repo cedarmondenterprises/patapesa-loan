@@ -540,7 +540,7 @@ router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next)
          la.loan_amount AS amount,la.loan_term AS term,la.purpose,la.status,
          la.interest_rate AS "interestRate",la.total_amount_payable AS "totalPayable",
          la.monthly_payment AS "monthlyPayment",la.rejection_reason AS "rejectionReason",
-         la.reviewed_at AS "reviewedAt",la.created_at AS "createdAt"
+         la.reviewed_at AS "reviewedAt",la.created_at AS "createdAt",la.updated_at AS "updatedAt"
          FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id
          WHERE la.user_id=$1 ORDER BY la.created_at DESC`,
         [id],
@@ -867,7 +867,9 @@ router.get(
     la.monthly_payment AS "monthlyPayment",la.status,la.created_at AS "createdAt",lp.name AS product,
     u.first_name AS "firstName",u.last_name AS "lastName",u.email,
     EXTRACT(YEAR FROM age(CURRENT_DATE,u.date_of_birth))::int AS age,up.income_range AS "incomeRange",
-    up.employment_type AS "employmentType",COALESCE(k.verification_status,'NOT_SUBMITTED') AS "kycStatus"
+    up.employment_type AS "employmentType",u.status AS "userStatus",
+    (up.profile_completed_at IS NOT NULL) AS "profileComplete",la.declaration_accepted AS "declarationAccepted",
+    COALESCE(k.verification_status,'NOT_SUBMITTED') AS "kycStatus"
     FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id JOIN users u ON u.id=la.user_id
     LEFT JOIN user_profiles up ON up.user_id=u.id LEFT JOIN kyc_verifications k ON k.user_id=u.id
     WHERE la.status IN ('SUBMITTED','UNDER_REVIEW','APPROVED') ORDER BY la.created_at ASC LIMIT 200`);
@@ -892,19 +894,50 @@ router.patch(
       if (req.body.status === 'REJECTED' && !req.body.reason)
         return res.status(400).json({ success: false, message: 'A rejection reason is required' });
       if (req.body.status === 'APPROVED') {
-        const eligible = await query(
-          `SELECT 1 FROM loan_applications la JOIN users u ON u.id=la.user_id
-           JOIN user_profiles up ON up.user_id=la.user_id AND up.profile_completed_at IS NOT NULL
-           JOIN kyc_verifications k ON k.user_id=la.user_id AND k.verification_status='APPROVED'
-           WHERE la.id=$1 AND u.status='ACTIVE' AND u.date_of_birth<=CURRENT_DATE-INTERVAL '18 years'
-           AND COALESCE(la.affordability_ratio,0)<=0.5 AND la.declaration_accepted=true`,
-          [req.params.id],
-        );
-        if (!eligible.length)
+        const candidate = (
+          await query<{
+            userStatus: string;
+            adult: boolean;
+            profileComplete: boolean;
+            declarationAccepted: boolean;
+            affordabilityRatio: string | null;
+            kycStatus: string;
+          }>(
+            `SELECT u.status AS "userStatus",
+             (u.date_of_birth<=CURRENT_DATE-INTERVAL '18 years') AS adult,
+             (up.profile_completed_at IS NOT NULL) AS "profileComplete",
+             la.declaration_accepted AS "declarationAccepted",
+             la.affordability_ratio AS "affordabilityRatio",
+             COALESCE(k.verification_status,'NOT_SUBMITTED') AS "kycStatus"
+             FROM loan_applications la JOIN users u ON u.id=la.user_id
+             LEFT JOIN user_profiles up ON up.user_id=la.user_id
+             LEFT JOIN kyc_verifications k ON k.user_id=la.user_id
+             WHERE la.id=$1 AND la.status IN ('SUBMITTED','UNDER_REVIEW')`,
+            [req.params.id],
+          )
+        )[0];
+        if (!candidate)
           return res.status(409).json({
             success: false,
-            message:
-              'Approval requires an adult active customer, completed profile, accepted declaration, affordable repayment and approved KYC',
+            message: 'This application is no longer awaiting review',
+          });
+        const blockers = [
+          candidate.userStatus !== 'ACTIVE' ? 'customer account is not active' : '',
+          !candidate.adult ? 'customer age is not eligible' : '',
+          !candidate.profileComplete ? 'customer profile is incomplete' : '',
+          !candidate.declarationAccepted ? 'application declaration is missing' : '',
+          Number(candidate.affordabilityRatio ?? Number.POSITIVE_INFINITY) > 0.5
+            ? 'monthly commitment exceeds the 50% affordability limit'
+            : '',
+          candidate.kycStatus !== 'APPROVED'
+            ? `KYC is ${candidate.kycStatus.toLowerCase().replace(/_/g, ' ')}`
+            : '',
+        ].filter(Boolean);
+        if (blockers.length)
+          return res.status(409).json({
+            success: false,
+            message: `Cannot approve: ${blockers.join('; ')}`,
+            data: { blockers },
           });
       }
       const row = (

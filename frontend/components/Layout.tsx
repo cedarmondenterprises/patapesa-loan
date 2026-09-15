@@ -5,7 +5,13 @@ import { useRouter } from 'next/router';
 import Brand from './Brand';
 
 const SITE_URL = 'https://cedarmondtv.site';
-const PRIVATE_PATHS = new Set(['/dashboard', '/login', '/register', '/forgot-password', '/reset-password']);
+const PRIVATE_PATHS = new Set([
+  '/dashboard',
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+]);
 
 export default function Layout({
   children,
@@ -22,7 +28,13 @@ export default function Layout({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const nav = [['/', 'Home'], ['/loans', 'Loans'], ['/about', 'Application process'], ['/faq', 'Help']];
+  const nav = [
+    ['/', 'Home'],
+    ['/loans', 'Apply'],
+    ['/dashboard#application-progress', 'Track application'],
+    ['/about', 'How it works'],
+    ['/faq', 'Help'],
+  ];
   const path = canonicalPath || router.pathname;
   const canonicalUrl = `${SITE_URL}${path === '/' ? '' : path}`;
   const preventIndexing = noIndex || PRIVATE_PATHS.has(router.pathname);
@@ -55,7 +67,10 @@ export default function Layout({
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#0B1F4B" />
-        <meta name="robots" content={preventIndexing ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'} />
+        <meta
+          name="robots"
+          content={preventIndexing ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'}
+        />
         <link rel="canonical" href={canonicalUrl} />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="PataPesa" />
@@ -72,30 +87,83 @@ export default function Layout({
         <meta name="twitter:image" content={`${SITE_URL}/social-preview.svg`} />
         <link rel="icon" href="/favicon.svg" />
         {!preventIndexing && (
-          <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+          />
         )}
       </Head>
       <div className="site-shell">
         <header className="site-header">
           <nav className="site-nav" aria-label="Main navigation">
             <Brand />
-            <div className="desktop-nav">{nav.map(([href, label]) => <Link key={href} href={href} className={router.pathname === href ? 'active' : ''}>{label}</Link>)}</div>
+            <div className="desktop-nav">
+              {nav.map(([href, label]) => (
+                <Link key={href} href={href} className={router.pathname === href ? 'active' : ''}>
+                  {label}
+                </Link>
+              ))}
+            </div>
             <div className="nav-actions">
-              <Link href="/login" className="text-link">Sign in</Link>
-              <Link href="/register" className="button button-primary button-small">Apply</Link>
-              <button className="menu-button" aria-label="Toggle navigation" aria-expanded={open} onClick={() => setOpen(!open)}><span /><span /><span /></button>
+              <Link href="/login" className="text-link">
+                Sign in
+              </Link>
+              <Link href="/register" className="button button-primary button-small">
+                Apply
+              </Link>
+              <button
+                className="menu-button"
+                aria-label="Toggle navigation"
+                aria-expanded={open}
+                onClick={() => setOpen(!open)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
             </div>
           </nav>
-          {open && <div className="mobile-nav">{nav.map(([href, label]) => <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>)}<Link href="/login">Sign in</Link><Link href="/register">Apply</Link></div>}
+          {open && (
+            <div className="mobile-nav">
+              {nav.map(([href, label]) => (
+                <Link key={href} href={href} onClick={() => setOpen(false)}>
+                  {label}
+                </Link>
+              ))}
+              <Link href="/login">Sign in</Link>
+              <Link href="/register">Apply</Link>
+            </div>
+          )}
         </header>
         <main className="site-main">{children}</main>
         <footer className="site-footer">
           <div className="footer-grid">
-            <div><Brand /><p className="footer-copy">Loan estimates, applications and account tracking in one place.</p></div>
-            <div className="footer-links"><strong>Customer</strong><Link href="/loans">Loans</Link><Link href="/about">Application process</Link><Link href="/faq">Help</Link><Link href="/contact">Contact</Link></div>
-            <div className="footer-links"><strong>Legal</strong><Link href="/terms">Terms and conditions</Link><Link href="/privacy">Privacy policy</Link><a href="https://admin.cedarmondtv.site">Staff access</a></div>
+            <div>
+              <Brand />
+              <p className="footer-copy">
+                Loan estimates, applications and account tracking in one place.
+              </p>
+            </div>
+            <div className="footer-links">
+              <strong>Customer</strong>
+              <Link href="/loans">Loans</Link>
+              <Link href="/about">Application process</Link>
+              <Link href="/faq">Help</Link>
+              <Link href="/contact">Contact</Link>
+            </div>
+            <div className="footer-links">
+              <strong>Legal</strong>
+              <Link href="/terms">Terms and conditions</Link>
+              <Link href="/privacy">Privacy policy</Link>
+              <a href="https://admin.cedarmondtv.site">Staff access</a>
+            </div>
           </div>
-          <div className="footer-bottom"><span>© {new Date().getFullYear()} PataPesa</span><span>All applications are subject to identity, eligibility and affordability assessment.</span></div>
+          <div className="footer-bottom">
+            <span>© {new Date().getFullYear()} PataPesa</span>
+            <span>
+              All applications are subject to identity, eligibility and affordability assessment.
+            </span>
+          </div>
         </footer>
       </div>
     </>

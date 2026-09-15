@@ -359,6 +359,96 @@ describe('API security and authentication surface', () => {
     expect(response.body.data).toEqual([]);
   });
 
+  it('explains the exact blocker instead of failing loan approval generically', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const applicationId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const token = createToken({ id, email: 'staff@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([
+        {
+          userStatus: 'ACTIVE',
+          adult: true,
+          profileComplete: true,
+          declarationAccepted: true,
+          affordabilityRatio: '0.35',
+          kycStatus: 'PENDING',
+        },
+      ]);
+    const response = await request(app)
+      .patch(`/api/admin/applications/${applicationId}`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({ status: 'APPROVED' });
+    expect(response.status).toBe(409);
+    expect(response.body.message).toBe('Cannot approve: KYC is pending');
+    expect(response.body.data.blockers).toEqual(['KYC is pending']);
+    expect(queryMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('approves a loan after every recorded eligibility check passes', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const applicationId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const token = createToken({ id, email: 'staff@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'staff@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([
+        {
+          userStatus: 'ACTIVE',
+          adult: true,
+          profileComplete: true,
+          declarationAccepted: true,
+          affordabilityRatio: '0.35',
+          kycStatus: 'APPROVED',
+        },
+      ])
+      .mockResolvedValueOnce([
+        { id: applicationId, applicationNumber: 'PPL-TEST', status: 'APPROVED' },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .patch(`/api/admin/applications/${applicationId}`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({ status: 'APPROVED' });
+    expect(response.status).toBe(200);
+    expect(response.body.data.status).toBe('APPROVED');
+    expect(queryMock.mock.calls[3][0]).toContain("status IN ('SUBMITTED','UNDER_REVIEW')");
+  });
+
+  it('lets a product manager update customer-facing lending limits', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const productId = '1c4c0f53-e4e1-4e1c-b54f-5403fa1b2bc2';
+    const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'manager@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([{ allowed: 1 }])
+      .mockResolvedValueOnce([
+        { id: productId, code: 'PERSONAL', name: 'Personal loan', status: 'ACTIVE' },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .patch(`/api/admin/products/${productId}`)
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({
+        name: 'Personal loan',
+        description: 'Flexible credit for planned personal expenses.',
+        minAmount: 10000,
+        maxAmount: 500000,
+        minTerm: 3,
+        maxTerm: 24,
+        interestRate: 15,
+        processingFee: 2.5,
+        status: 'ACTIVE',
+      });
+    expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Loan product updated');
+    expect(queryMock.mock.calls[2][0]).toContain('UPDATE loan_products');
+  });
+
   it('allows an advertising manager to save a disabled placement', async () => {
     const id = '8f95d132-4665-4c15-8623-652e76f18c70';
     const token = createToken({ id, email: 'manager@example.com', authVersion: 0 });
