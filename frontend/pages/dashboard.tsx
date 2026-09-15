@@ -356,7 +356,7 @@ export default function Dashboard() {
           )}{' '}
         </section>
         <aside className="space-y-6">
-          <section className="surface p-6">
+          <section id="identity-verification" className="surface scroll-mt-24 p-6">
             <p className="eyebrow">Next step</p>
             <h2 className="mt-2 text-xl font-bold text-pata-950">
               {needsKyc
@@ -452,86 +452,211 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
   const status = application.status;
   const decisionReached = ['APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status);
   const fundsRecorded = ['DISBURSED', 'COMPLETED'].includes(status);
+  const identityApproved = kyc?.status === 'APPROVED';
+  const identityNeedsAction = !kyc || ['REJECTED', 'EXPIRED'].includes(kyc.status);
+  const approved = ['APPROVED', 'DISBURSED', 'COMPLETED'].includes(status);
+  const underReview = status === 'UNDER_REVIEW';
+  const rejected = status === 'REJECTED';
   const stages = [
     {
-      label: 'Submitted',
-      detail: new Date(application.createdAt).toLocaleDateString('en-KE'),
-      done: true,
+      label: 'Application received',
+      detail: `Submitted ${new Date(application.createdAt).toLocaleDateString('en-KE')}`,
+      state: 'complete',
     },
     {
-      label: 'Identity and affordability review',
-      detail:
-        kyc?.status === 'APPROVED'
-          ? 'Identity verified'
-          : kyc?.status === 'PENDING'
-            ? 'Identity check pending'
-            : 'Identity action required',
-      done: ['UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status),
+      label: identityNeedsAction ? 'Identity details need attention' : 'Identity verification',
+      detail: identityApproved
+        ? 'Your identity details have been verified'
+        : kyc?.status === 'PENDING'
+          ? 'Your identity details are being checked'
+          : identityNeedsAction
+            ? kyc?.rejectionReason || 'Please correct and resubmit your identity details'
+            : 'Submit your identity details to continue',
+      state: identityNeedsAction ? 'attention' : identityApproved ? 'complete' : 'current',
     },
     {
-      label: status === 'REJECTED' ? 'Not approved' : 'Decision recorded',
-      detail: application.reviewedAt
-        ? new Date(application.reviewedAt).toLocaleDateString('en-KE')
-        : 'Awaiting staff decision',
-      done: decisionReached,
+      label: underReview ? 'Application review in progress' : 'Application review',
+      detail: decisionReached
+        ? 'Identity, affordability and application details reviewed'
+        : underReview
+          ? 'Our team is assessing your application'
+          : identityApproved
+            ? 'Your application is queued for review'
+            : 'This starts after identity verification',
+      state: decisionReached ? 'complete' : identityApproved ? 'current' : 'upcoming',
     },
     {
-      label: status === 'REJECTED' ? 'Process closed' : 'Funds recorded',
-      detail:
-        status === 'REJECTED'
-          ? 'You may review the explanation and submit a new application'
-          : fundsRecorded
-            ? 'External transfer confirmed'
-            : 'Only after an approved transfer',
-      done: status === 'REJECTED' || fundsRecorded,
+      label: rejected ? 'Application not approved' : approved ? 'Application approved' : 'Decision',
+      detail: decisionReached
+        ? `Recorded ${new Date(application.reviewedAt || application.updatedAt).toLocaleDateString(
+            'en-KE',
+          )}`
+        : 'We will show the decision here after review',
+      state: rejected ? 'attention' : approved ? 'complete' : 'upcoming',
+    },
+    {
+      label: fundsRecorded ? 'Funds sent' : 'Disbursement',
+      detail: rejected
+        ? 'This step is not available for this application'
+        : fundsRecorded
+          ? 'The transfer has been recorded'
+          : approved
+            ? 'The approved transfer is being prepared'
+            : 'This starts only after approval',
+      state: fundsRecorded ? 'complete' : approved ? 'current' : 'upcoming',
     },
   ];
-  const current = stages.findIndex((stage) => !stage.done);
+  const currentIndex = fundsRecorded || approved ? 4 : rejected ? 3 : identityApproved ? 2 : 1;
+  const progress = fundsRecorded
+    ? 100
+    : approved || rejected
+      ? 80
+      : Math.round(((currentIndex + 1) / stages.length) * 100);
+  const summary = rejected
+    ? {
+        eyebrow: 'Decision recorded',
+        title: 'Your application was not approved',
+        copy: 'Read the reason below. Contact support if you need an explanation.',
+        action: 'Review the decision reason',
+        tone: 'danger',
+      }
+    : fundsRecorded
+      ? {
+          eyebrow: 'Disbursement recorded',
+          title: 'Your funds have been sent',
+          copy: 'Your repayment information will appear when it is recorded.',
+          action: 'No action is needed right now',
+          tone: 'success',
+        }
+      : approved
+        ? {
+            eyebrow: 'Decision recorded',
+            title: 'Your application is approved',
+            copy: 'The transfer is being prepared. We will update this page when it is recorded.',
+            action: 'No action is needed right now',
+            tone: 'success',
+          }
+        : underReview
+          ? {
+              eyebrow: 'Review in progress',
+              title: 'We are reviewing your application',
+              copy: 'Our team is checking your identity, affordability and application details.',
+              action: 'No action is needed right now',
+              tone: 'review',
+            }
+          : identityNeedsAction
+            ? {
+                eyebrow: 'Action required',
+                title: 'Update your identity details',
+                copy: kyc?.rejectionReason || 'Identity verification is required before review.',
+                action: 'Go to identity verification',
+                tone: 'danger',
+              }
+            : identityApproved
+              ? {
+                  eyebrow: 'Waiting for review',
+                  title: 'Your application is in the review queue',
+                  copy: 'Your identity is verified. We will update this page when review starts.',
+                  action: 'No action is needed right now',
+                  tone: 'review',
+                }
+              : {
+                  eyebrow: 'Identity check',
+                  title: 'We are checking your identity details',
+                  copy: 'Your application enters the review queue after this check is complete.',
+                  action: 'No action is needed right now',
+                  tone: 'review',
+                };
   return (
     <section
       id="application-progress"
-      className="surface mt-10 scroll-mt-24 p-6 sm:p-8"
+      className="application-tracker surface mt-10 scroll-mt-24"
       aria-labelledby="application-progress-title"
     >
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+      <div className="application-tracker-header">
         <div>
-          <p className="eyebrow">Latest application · {application.applicationNumber}</p>
-          <h2 id="application-progress-title" className="mt-2 text-2xl font-bold text-pata-950">
-            Loan application progress
+          <p className="eyebrow">Application progress</p>
+          <h2 id="application-progress-title">
+            {application.product} · {money(application.amount)}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Last updated{' '}
-            {new Date(application.updatedAt || application.createdAt).toLocaleString('en-KE')}
-          </p>
+          <p className="application-reference">Reference {application.applicationNumber}</p>
         </div>
         <StatusBadge status={status} />
       </div>
-      <ol className="mt-7 grid gap-3 md:grid-cols-4" aria-label="Application progress">
+
+      <div className={`application-current application-current-${summary.tone}`}>
+        <div className="application-current-copy">
+          <p>{summary.eyebrow}</p>
+          <h3>{summary.title}</h3>
+          <span>{summary.copy}</span>
+        </div>
+        <div className="application-next-action">
+          <small>What you need to do</small>
+          {!decisionReached && identityNeedsAction ? (
+            <a href="#identity-verification">{summary.action} ↓</a>
+          ) : (
+            <strong>{summary.action}</strong>
+          )}
+        </div>
+      </div>
+
+      <div className="application-progress-meter">
+        <div className="application-progress-label">
+          <span>
+            Step {currentIndex + 1} of {stages.length}
+          </span>
+          <span>{summary.eyebrow}</span>
+        </div>
+        <div
+          className="application-progress-track"
+          role="progressbar"
+          aria-label="Application progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      <ol className="application-timeline" aria-label="Application stages">
         {stages.map((stage, index) => (
           <li
             key={stage.label}
-            aria-current={index === current ? 'step' : undefined}
-            className={`border-t-4 p-4 ${
-              stage.done
-                ? 'border-pata-700 bg-pata-50'
-                : index === current
-                  ? 'border-copper bg-[#f7f1e7]'
-                  : 'border-slate-200 bg-white'
-            }`}
+            aria-current={stage.state === 'current' ? 'step' : undefined}
+            className={`application-stage application-stage-${stage.state}`}
           >
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              {String(index + 1).padStart(2, '0')}
+            <span className="application-stage-marker" aria-hidden="true">
+              {stage.state === 'complete' ? '✓' : stage.state === 'attention' ? '!' : index + 1}
             </span>
-            <strong className="mt-2 block text-sm text-pata-950">{stage.label}</strong>
-            <small className="mt-1 block leading-5 text-slate-500">{stage.detail}</small>
+            <div>
+              <span className="application-stage-state">
+                {stage.state === 'complete'
+                  ? 'Complete'
+                  : stage.state === 'current'
+                    ? 'In progress'
+                    : stage.state === 'attention'
+                      ? 'Action needed'
+                      : 'Coming next'}
+              </span>
+              <strong>{stage.label}</strong>
+              <small>{stage.detail}</small>
+            </div>
           </li>
         ))}
       </ol>
+
       {application.rejectionReason && (
-        <div className="notice notice-error mt-5" role="alert">
-          <strong>Decision explanation:</strong> {application.rejectionReason}
+        <div className="application-decision" role="alert">
+          <span>Reason provided</span>
+          <strong>{application.rejectionReason}</strong>
+          <Link href="/contact">Ask support about this decision →</Link>
         </div>
       )}
+      <p className="application-updated">
+        Last updated{' '}
+        {new Date(application.updatedAt || application.createdAt).toLocaleString('en-KE')}
+      </p>
     </section>
   );
 }
