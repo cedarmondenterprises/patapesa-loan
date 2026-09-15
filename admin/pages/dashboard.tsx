@@ -35,6 +35,26 @@ const date = (v: unknown) =>
   v
     ? new Date(String(v)).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })
     : '—';
+const matches = (row: Row, search: string, fields: string[]) => {
+  const needle = search.trim().toLowerCase();
+  return (
+    !needle ||
+    fields.some((field) =>
+      String(row[field] || '')
+        .toLowerCase()
+        .includes(needle),
+    )
+  );
+};
+const queueAge = (value: Row[string]) => {
+  const timestamp = new Date(String(value || '')).getTime();
+  if (!Number.isFinite(timestamp)) return 'Unknown age';
+  const hours = Math.max(0, Math.floor((Date.now() - timestamp) / 3_600_000));
+  if (hours < 1) return 'Less than 1 hour';
+  if (hours < 24) return `${hours}h waiting`;
+  const days = Math.floor(hours / 24);
+  return `${days}d waiting`;
+};
 
 export default function Dashboard() {
   const router = useRouter(),
@@ -167,6 +187,32 @@ export default function Dashboard() {
       (u) => !q || `${u.firstName} ${u.lastName} ${u.email} ${u.phone}`.toLowerCase().includes(q),
     );
   }, [users, query]);
+  const filteredApps = useMemo(
+    () =>
+      apps.filter((row) =>
+        matches(row, query, [
+          'applicationNumber',
+          'firstName',
+          'lastName',
+          'email',
+          'product',
+          'purposeCategory',
+          'status',
+        ]),
+      ),
+    [apps, query],
+  );
+  const filteredKyc = useMemo(
+    () => kyc.filter((row) => matches(row, query, ['firstName', 'lastName', 'email', 'idType'])),
+    [kyc, query],
+  );
+  const filteredSupport = useMemo(
+    () =>
+      support.filter((row) =>
+        matches(row, query, ['reference', 'name', 'email', 'subject', 'message', 'status']),
+      ),
+    [support, query],
+  );
   const counts: Record<string, number> = {
     Registrations: users.filter((u) => u.registrationReference).length,
     'Loan review': apps.length,
@@ -311,7 +357,11 @@ export default function Dashboard() {
                               u.status === 'ACTIVE'
                                 ? 'Suspend this account?'
                                 : 'Activate this account?',
-                            copy: `This will immediately ${u.status === 'ACTIVE' ? 'end the user’s active sessions and block access' : 'allow the user to sign in'}.`,
+                            copy: `This will immediately ${
+                              u.status === 'ACTIVE'
+                                ? 'end the user’s active sessions and block access'
+                                : 'allow the user to sign in'
+                            }.`,
                             label: u.status === 'ACTIVE' ? 'Suspend account' : 'Activate account',
                             danger: u.status === 'ACTIVE',
                             run: () =>
@@ -340,7 +390,10 @@ export default function Dashboard() {
                               copy:
                                 role === 'NONE'
                                   ? `Remove all staff access from ${u.email}. Their customer account will remain available.`
-                                  : `Give ${u.email} the permissions attached to the ${role.replace('_', ' ')} role.`,
+                                  : `Give ${u.email} the permissions attached to the ${role.replace(
+                                      '_',
+                                      ' ',
+                                    )} role.`,
                               label: role === 'NONE' ? 'Remove staff access' : 'Assign role',
                               danger: role === 'NONE' || role === 'SUPER_ADMIN',
                               run: () =>
@@ -365,169 +418,192 @@ export default function Dashboard() {
               </>
             )}
             {tab === 'Loan review' && (
-              <Table
-                heads={['Reference', 'Customer', 'Request', 'Eligibility', 'Status', 'Decision']}
-                rows={apps.map((a) => [
-                  a.applicationNumber,
-                  <Person row={a} key="p" />,
-                  `${a.product} · ${String(a.purposeCategory || 'OTHER').replaceAll('_', ' ')}\n${money(a.amount)} · ${a.term} months · ${money(a.monthlyPayment)}/month\n${a.purpose}\nRepayment: ${a.repaymentSource || 'Legacy record'}`,
-                  `Age: ${a.age ?? 'Missing'}\nIncome: ${String(a.incomeRange || 'Missing').replaceAll('_', ' ')}\nExisting debt: ${money(a.existingMonthlyDebt)}\nCommitment ratio: ${(Number(a.affordabilityRatio || 0) * 100).toFixed(1)}%\nKYC: ${String(a.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}`,
-                  <Status value={a.status} key="s" />,
-                  <div className="actions" key="d">
-                    {a.status !== 'APPROVED' ? (
-                      <>
-                        <button
-                          onClick={() =>
-                            void act(
-                              `/admin/applications/${a.id}`,
-                              'PATCH',
-                              { status: 'UNDER_REVIEW' },
-                              'Application moved to review',
-                            )
-                          }
-                        >
-                          Start review
-                        </button>
+              <>
+                <Toolbar value={query} setValue={setQuery} placeholder="Search loan queue" />
+                <Table
+                  heads={['Reference', 'Customer', 'Request', 'Eligibility', 'Status', 'Decision']}
+                  rows={filteredApps.map((a) => [
+                    `${a.applicationNumber}\n${queueAge(a.createdAt)}`,
+                    <Person row={a} key="p" />,
+                    `${a.product} · ${String(a.purposeCategory || 'OTHER').replaceAll(
+                      '_',
+                      ' ',
+                    )}\n${money(a.amount)} · ${a.term} months · ${money(a.monthlyPayment)}/month\n${
+                      a.purpose
+                    }\nRepayment: ${a.repaymentSource || 'Legacy record'}`,
+                    `Age: ${a.age ?? 'Missing'}\nIncome: ${String(
+                      a.incomeRange || 'Missing',
+                    ).replaceAll('_', ' ')}\nExisting debt: ${money(
+                      a.existingMonthlyDebt,
+                    )}\nCommitment ratio: ${(Number(a.affordabilityRatio || 0) * 100).toFixed(
+                      1,
+                    )}%\nKYC: ${String(a.kycStatus || 'NOT_SUBMITTED').replaceAll('_', ' ')}`,
+                    <Status value={a.status} key="s" />,
+                    <div className="actions" key="d">
+                      {a.status !== 'APPROVED' ? (
+                        <>
+                          <button
+                            onClick={() =>
+                              void act(
+                                `/admin/applications/${a.id}`,
+                                'PATCH',
+                                { status: 'UNDER_REVIEW' },
+                                'Application moved to review',
+                              )
+                            }
+                          >
+                            Start review
+                          </button>
+                          <button
+                            className="approve"
+                            onClick={() =>
+                              ask({
+                                title: 'Approve this loan application?',
+                                copy: `Approve ${money(a.amount)} for ${a.firstName} ${
+                                  a.lastName
+                                }. Approved KYC and an active account are required.`,
+                                label: 'Approve application',
+                                run: () =>
+                                  act(
+                                    `/admin/applications/${a.id}`,
+                                    'PATCH',
+                                    { status: 'APPROVED' },
+                                    'Loan application approved',
+                                  ),
+                              })
+                            }
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="danger"
+                            onClick={() =>
+                              ask({
+                                title: 'Reject this application?',
+                                copy: 'Provide a clear reason. It will be retained with the application record.',
+                                label: 'Reject application',
+                                danger: true,
+                                reason: true,
+                                run: (r) =>
+                                  act(
+                                    `/admin/applications/${a.id}`,
+                                    'PATCH',
+                                    { status: 'REJECTED', reason: r },
+                                    'Loan application rejected',
+                                  ),
+                              })
+                            }
+                          >
+                            Reject
+                          </button>
+                        </>
+                      ) : (
                         <button
                           className="approve"
                           onClick={() =>
                             ask({
-                              title: 'Approve this loan application?',
-                              copy: `Approve ${money(a.amount)} for ${a.firstName} ${a.lastName}. Approved KYC and an active account are required.`,
-                              label: 'Approve application',
+                              title: 'Confirm external disbursement?',
+                              copy: `Only continue after confirming that ${money(
+                                a.amount,
+                              )} was successfully sent outside PataPesa. This creates the loan ledger and repayment schedule.`,
+                              label: 'Record disbursement',
                               run: () =>
                                 act(
-                                  `/admin/applications/${a.id}`,
-                                  'PATCH',
-                                  { status: 'APPROVED' },
-                                  'Loan application approved',
+                                  `/admin/applications/${a.id}/disburse`,
+                                  'POST',
+                                  {},
+                                  'Disbursement recorded',
                                 ),
                             })
                           }
                         >
-                          Approve
+                          Record disbursement
                         </button>
-                        <button
-                          className="danger"
-                          onClick={() =>
-                            ask({
-                              title: 'Reject this application?',
-                              copy: 'Provide a clear reason. It will be retained with the application record.',
-                              label: 'Reject application',
-                              danger: true,
-                              reason: true,
-                              run: (r) =>
-                                act(
-                                  `/admin/applications/${a.id}`,
-                                  'PATCH',
-                                  { status: 'REJECTED', reason: r },
-                                  'Loan application rejected',
-                                ),
-                            })
-                          }
-                        >
-                          Reject
+                      )}
+                    </div>,
+                  ])}
+                />
+              </>
+            )}
+            {tab === 'KYC review' && (
+              <>
+                <Toolbar value={query} setValue={setQuery} placeholder="Search identity queue" />
+                <Table
+                  heads={['Customer', 'Identity', 'Submitted', 'Decision']}
+                  rows={filteredKyc.map((k) => [
+                    <Person row={k} key="p" />,
+                    <div className="identity-cell" key="identity">
+                      <strong>{String(k.idType).replaceAll('_', ' ')}</strong>
+                      <small>Ending {k.idNumberLast4 || '—'}</small>
+                      {revealedKyc[String(k.id)] ? (
+                        <>
+                          <code>{revealedKyc[String(k.id)]}</code>
+                          <button
+                            onClick={() =>
+                              setRevealedKyc((current) => {
+                                const next = { ...current };
+                                delete next[String(k.id)];
+                                return next;
+                              })
+                            }
+                          >
+                            Hide number
+                          </button>
+                        </>
+                      ) : (
+                        <button onClick={() => void revealIdentity(String(k.id))}>
+                          Reveal for review
                         </button>
-                      </>
-                    ) : (
+                      )}
+                    </div>,
+                    `${date(k.createdAt)}\n${queueAge(k.createdAt)}`,
+                    <div className="actions" key="d">
                       <button
                         className="approve"
                         onClick={() =>
                           ask({
-                            title: 'Confirm external disbursement?',
-                            copy: `Only continue after confirming that ${money(a.amount)} was successfully sent outside PataPesa. This creates the loan ledger and repayment schedule.`,
-                            label: 'Record disbursement',
+                            title: 'Approve identity verification?',
+                            copy: `Confirm that the submitted ${String(k.idType)
+                              .replaceAll('_', ' ')
+                              .toLowerCase()} belongs to ${k.firstName} ${k.lastName}.`,
+                            label: 'Approve KYC',
                             run: () =>
                               act(
-                                `/admin/applications/${a.id}/disburse`,
-                                'POST',
-                                {},
-                                'Disbursement recorded',
+                                `/admin/kyc/${k.id}`,
+                                'PATCH',
+                                { status: 'APPROVED' },
+                                'Identity verification approved',
                               ),
                           })
                         }
                       >
-                        Record disbursement
+                        Approve
                       </button>
-                    )}
-                  </div>,
-                ])}
-              />
-            )}
-            {tab === 'KYC review' && (
-              <Table
-                heads={['Customer', 'Identity', 'Submitted', 'Decision']}
-                rows={kyc.map((k) => [
-                  <Person row={k} key="p" />,
-                  <div className="identity-cell" key="identity">
-                    <strong>{String(k.idType).replaceAll('_', ' ')}</strong>
-                    <small>Ending {k.idNumberLast4 || '—'}</small>
-                    {revealedKyc[String(k.id)] ? (
-                      <>
-                        <code>{revealedKyc[String(k.id)]}</code>
-                        <button
-                          onClick={() =>
-                            setRevealedKyc((current) => {
-                              const next = { ...current };
-                              delete next[String(k.id)];
-                              return next;
-                            })
-                          }
-                        >
-                          Hide number
-                        </button>
-                      </>
-                    ) : (
-                      <button onClick={() => void revealIdentity(String(k.id))}>
-                        Reveal for review
+                      <button
+                        className="danger"
+                        onClick={() =>
+                          ask({
+                            title: 'Reject identity verification?',
+                            copy: 'Enter the reason the customer must correct before resubmitting.',
+                            label: 'Reject KYC',
+                            danger: true,
+                            reason: true,
+                            run: (r) =>
+                              act(
+                                `/admin/kyc/${k.id}`,
+                                'PATCH',
+                                { status: 'REJECTED', reason: r },
+                                'Identity verification rejected',
+                              ),
+                          })
+                        }
+                      >
+                        Reject
                       </button>
-                    )}
-                  </div>,
-                  date(k.createdAt),
-                  <div className="actions" key="d">
-                    <button
-                      className="approve"
-                      onClick={() =>
-                        ask({
-                          title: 'Approve identity verification?',
-                          copy: `Confirm that the submitted ${String(k.idType).replaceAll('_', ' ').toLowerCase()} belongs to ${k.firstName} ${k.lastName}.`,
-                          label: 'Approve KYC',
-                          run: () =>
-                            act(
-                              `/admin/kyc/${k.id}`,
-                              'PATCH',
-                              { status: 'APPROVED' },
-                              'Identity verification approved',
-                            ),
-                        })
-                      }
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className="danger"
-                      onClick={() =>
-                        ask({
-                          title: 'Reject identity verification?',
-                          copy: 'Enter the reason the customer must correct before resubmitting.',
-                          label: 'Reject KYC',
-                          danger: true,
-                          reason: true,
-                          run: (r) =>
-                            act(
-                              `/admin/kyc/${k.id}`,
-                              'PATCH',
-                              { status: 'REJECTED', reason: r },
-                              'Identity verification rejected',
-                            ),
-                        })
-                      }
-                    >
-                      Reject
-                    </button>
-                  </div>,
-                ])}
-              />
+                    </div>,
+                  ])}
+                />
+              </>
             )}
             {tab === 'Loan ledger' && (
               <>
@@ -568,33 +644,36 @@ export default function Dashboard() {
               </>
             )}
             {tab === 'Support' && (
-              <Table
-                heads={['Reference', 'Customer', 'Subject', 'Message', 'Status', 'Manage']}
-                rows={support.map((s) => [
-                  s.reference,
-                  <Person row={s} key="p" />,
-                  s.subject,
-                  s.message,
-                  <Status value={s.status} key="s" />,
-                  <select
-                    key="m"
-                    value={String(s.status)}
-                    onChange={(e) =>
-                      void act(
-                        `/admin/support/${s.id}`,
-                        'PATCH',
-                        { status: e.target.value },
-                        'Support request updated',
-                      )
-                    }
-                  >
-                    <option>OPEN</option>
-                    <option>IN_PROGRESS</option>
-                    <option>RESOLVED</option>
-                    <option>CLOSED</option>
-                  </select>,
-                ])}
-              />
+              <>
+                <Toolbar value={query} setValue={setQuery} placeholder="Search support queue" />
+                <Table
+                  heads={['Reference', 'Customer', 'Subject', 'Message', 'Status', 'Manage']}
+                  rows={filteredSupport.map((s) => [
+                    `${s.reference}\n${queueAge(s.createdAt)}`,
+                    <Person row={s} key="p" />,
+                    s.subject,
+                    s.message,
+                    <Status value={s.status} key="s" />,
+                    <select
+                      key="m"
+                      value={String(s.status)}
+                      onChange={(e) =>
+                        void act(
+                          `/admin/support/${s.id}`,
+                          'PATCH',
+                          { status: e.target.value },
+                          'Support request updated',
+                        )
+                      }
+                    >
+                      <option>OPEN</option>
+                      <option>IN_PROGRESS</option>
+                      <option>RESOLVED</option>
+                      <option>CLOSED</option>
+                    </select>,
+                  ])}
+                />
+              </>
             )}
             {tab === 'Tracking & ads' && (
               <AdManager
@@ -901,38 +980,72 @@ function AdManager({
             <div className="ad-form-grid">
               <label>
                 <span>Sponsor name</span>
-                <input name="sponsor" required minLength={2} maxLength={120}
-                  defaultValue={String(ad?.sponsor || '')} placeholder="Business or campaign name" />
+                <input
+                  name="sponsor"
+                  required
+                  minLength={2}
+                  maxLength={120}
+                  defaultValue={String(ad?.sponsor || '')}
+                  placeholder="Business or campaign name"
+                />
               </label>
               <label>
                 <span>Button label</span>
-                <input name="ctaLabel" required minLength={2} maxLength={60}
-                  defaultValue={String(ad?.ctaLabel || '')} placeholder="Learn more" />
+                <input
+                  name="ctaLabel"
+                  required
+                  minLength={2}
+                  maxLength={60}
+                  defaultValue={String(ad?.ctaLabel || '')}
+                  placeholder="Learn more"
+                />
               </label>
               <label className="span-2">
                 <span>Headline</span>
-                <input name="headline" required minLength={3} maxLength={160}
-                  defaultValue={String(ad?.headline || '')} placeholder="Short, factual headline" />
+                <input
+                  name="headline"
+                  required
+                  minLength={3}
+                  maxLength={160}
+                  defaultValue={String(ad?.headline || '')}
+                  placeholder="Short, factual headline"
+                />
               </label>
               <label className="span-2">
                 <span>Description</span>
-                <textarea name="body" required minLength={5} maxLength={500}
+                <textarea
+                  name="body"
+                  required
+                  minLength={5}
+                  maxLength={500}
                   defaultValue={String(ad?.body || '')}
-                  placeholder="Explain the offer without misleading claims" />
+                  placeholder="Explain the offer without misleading claims"
+                />
               </label>
               <label className="span-2">
                 <span>Destination URL</span>
-                <input name="targetUrl" required defaultValue={String(ad?.targetUrl || '')}
-                  placeholder="https://example.com/offer" />
+                <input
+                  name="targetUrl"
+                  required
+                  defaultValue={String(ad?.targetUrl || '')}
+                  placeholder="https://example.com/offer"
+                />
               </label>
               <label className="span-2">
                 <span>Image URL (optional)</span>
-                <input name="imageUrl" defaultValue={String(ad?.imageUrl || '')}
-                  placeholder="HTTPS image URL or /images/banner.jpg" />
+                <input
+                  name="imageUrl"
+                  defaultValue={String(ad?.imageUrl || '')}
+                  placeholder="HTTPS image URL or /images/banner.jpg"
+                />
               </label>
               <label>
                 <span>Starts (optional)</span>
-                <input name="startsAt" type="datetime-local" defaultValue={inputDate(ad?.startsAt)} />
+                <input
+                  name="startsAt"
+                  type="datetime-local"
+                  defaultValue={inputDate(ad?.startsAt)}
+                />
               </label>
               <label>
                 <span>Ends (optional)</span>
@@ -941,7 +1054,9 @@ function AdManager({
             </div>
             <div className="ad-editor-actions">
               <small>{ad?.updatedAt ? `Last saved ${date(ad.updatedAt)}` : 'Not configured'}</small>
-              <button className="primary" type="submit">Save placement</button>
+              <button className="primary" type="submit">
+                Save placement
+              </button>
             </div>
           </form>
         );

@@ -219,6 +219,29 @@ describe('API security and authentication surface', () => {
     expect(response.body.data.installments[0].remaining).toBe('2500.00');
     expect(queryMock.mock.calls[5][0]).toContain("payment_status='COMPLETED'");
     expect(queryMock.mock.calls[6][0]).toContain('repayment_schedules');
+    expect(queryMock.mock.calls[2][0]).toContain('rejection_reason AS "rejectionReason"');
+    expect(queryMock.mock.calls[2][0]).toContain('reviewed_at AS "reviewedAt"');
+  });
+
+  it('allows a customer to correct and resubmit rejected identity details', async () => {
+    const id = '8f95d132-4665-4c15-8623-652e76f18c70';
+    const kycId = 'd7663877-533c-4c37-ab4b-d5cf9daf42bb';
+    const token = createToken({ id, email: 'user@example.com', authVersion: 0 });
+    queryMock
+      .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([
+        { id: kycId, idType: 'NATIONAL_ID', idNumberLast4: '4321', status: 'PENDING' },
+      ])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .post('/api/kyc')
+      .set('Origin', 'http://localhost:3000')
+      .set('Cookie', `patapesa_session=${token}`)
+      .send({ idType: 'NATIONAL_ID', idNumber: '87654321' });
+    expect(response.status).toBe(201);
+    expect(response.body.data.status).toBe('PENDING');
+    expect(queryMock.mock.calls[1][0]).toContain("verification_status='PENDING'");
+    expect(queryMock.mock.calls[1][0]).toContain('rejection_reason=NULL');
   });
 
   it('submits an eligible loan application without requiring KYC first', async () => {
@@ -455,9 +478,7 @@ describe('API security and authentication surface', () => {
   });
   it('publishes privacy-safe Prometheus metrics without a public API route', async () => {
     expect(
-      normalizeMetricsPath(
-        '/api/admin/kyc/d7663877-533c-4c37-ab4b-d5cf9daf42bb/identity',
-      ),
+      normalizeMetricsPath('/api/admin/kyc/d7663877-533c-4c37-ab4b-d5cf9daf42bb/identity'),
     ).toBe('/api/admin/kyc/:id/identity');
     const response = await request(app).get('/api/metrics');
     expect(response.status).toBe(404);
@@ -466,5 +487,4 @@ describe('API security and authentication surface', () => {
     expect(metrics).toContain('route="/api/metrics"');
     expect(metrics).not.toContain('d7663877-533c-4c37-ab4b-d5cf9daf42bb');
   });
-
 });

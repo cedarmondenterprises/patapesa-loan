@@ -101,6 +101,10 @@ const educationOptions = [
 ];
 const choiceLabel = (options: string[][], selected: string) =>
   options.find(([value]) => value === selected)?.[1] || selected || 'Not provided';
+const localIsoDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
 
 export default function Register() {
   const router = useRouter();
@@ -111,10 +115,12 @@ export default function Register() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
-  const maxDob = useMemo(() => {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() - 18);
-    return date.toISOString().slice(0, 10);
+  const dobLimits = useMemo(() => {
+    const today = new Date();
+    return {
+      max: localIsoDate(new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())),
+      min: localIsoDate(new Date(today.getFullYear() - 100, today.getMonth(), today.getDate())),
+    };
   }, []);
   const checks = [
     form.password.length >= 10,
@@ -127,9 +133,10 @@ export default function Register() {
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       try {
-        const saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as
-          | { form?: Partial<FormState>; step?: number }
-          | null;
+        const saved = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as {
+          form?: Partial<FormState>;
+          step?: number;
+        } | null;
         if (saved?.form) setForm((current) => ({ ...current, ...saved.form }));
         if (Number.isInteger(saved?.step)) setStep(Math.min(3, Math.max(0, saved?.step || 0)));
       } catch {
@@ -290,7 +297,8 @@ export default function Register() {
                     name="dateOfBirth"
                     label="Date of birth"
                     type="date"
-                    max={maxDob}
+                    min={dobLimits.min}
+                    max={dobLimits.max}
                     hint="You must be at least 18 years old."
                   />
                   <Field

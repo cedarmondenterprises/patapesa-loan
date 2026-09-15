@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import AuthShell from '../components/AuthShell';
@@ -9,6 +9,16 @@ export default function Login() {
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
     [show, setShow] = useState(false);
+  const destination = useMemo(() => {
+    const requested = typeof router.query.next === 'string' ? router.query.next : '/dashboard';
+    return requested.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard';
+  }, [router.query.next]);
+  useEffect(() => {
+    if (!router.isReady) return;
+    api('/auth/me')
+      .then(() => router.replace(destination))
+      .catch(() => undefined);
+  }, [destination, router]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -23,7 +33,7 @@ export default function Login() {
           remember: form.get('remember') === 'on',
         }),
       });
-      await router.push('/dashboard');
+      await router.replace(destination);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Sign in failed');
     } finally {
@@ -68,6 +78,8 @@ export default function Login() {
             />
             <button
               type="button"
+              aria-pressed={show}
+              aria-label={show ? 'Hide password' : 'Show password'}
               className="absolute right-3 top-3 text-xs font-bold text-pata-700"
               onClick={() => setShow(!show)}
             >

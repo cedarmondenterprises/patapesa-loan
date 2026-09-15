@@ -14,9 +14,16 @@ type Application = {
   amount: string;
   term: number;
   status: string;
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
   createdAt: string;
 };
-type Kyc = { idType: string; idNumberLast4: string; status: string } | null;
+type Kyc = {
+  idType: string;
+  idNumberLast4: string;
+  status: string;
+  rejectionReason?: string | null;
+} | null;
 type Payment = {
   id: string;
   amount: string;
@@ -80,7 +87,8 @@ export default function Dashboard() {
         setInstallments(data.installments);
       })
       .catch((error) => {
-        if (error instanceof ApiError && error.status === 401) return router.replace('/login');
+        if (error instanceof ApiError && error.status === 401)
+          return router.replace({ pathname: '/login', query: { next: '/dashboard' } });
         setLoadError(error instanceof Error ? error.message : 'Unable to load your account');
       })
       .finally(() => setLoading(false));
@@ -110,6 +118,10 @@ export default function Dashboard() {
     }
   }
   const latest = apps[0],
+    needsKyc = !kyc || ['REJECTED', 'EXPIRED'].includes(kyc.status),
+    hasOpenApplication = Boolean(
+      latest && ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED'].includes(latest.status),
+    ),
     nextInstallment = installments.find(
       (item) => Number(item.remaining) > 0 && !['PAID', 'WAIVED'].includes(item.status),
     ),
@@ -151,7 +163,9 @@ export default function Dashboard() {
       </header>
       {message && (
         <p
-          className={`notice mt-6 ${message.toLowerCase().includes('failed') ? 'notice-error' : 'notice-success'}`}
+          className={`notice mt-6 ${
+            message.toLowerCase().includes('failed') ? 'notice-error' : 'notice-success'
+          }`}
         >
           {message}
         </p>
@@ -171,22 +185,24 @@ export default function Dashboard() {
         <Summary
           label="Your next action"
           value={
-            !kyc
-              ? 'Verify identity'
+            needsKyc
+              ? kyc?.status === 'REJECTED'
+                ? 'Correct identity details'
+                : 'Verify identity'
               : nextInstallment
-                ? `Pay ${money(nextInstallment.remaining)}`
-                : latest
-                  ? latest.status.replace(/_/g, ' ').toLowerCase()
-                  : 'Choose a loan'
+              ? `Pay ${money(nextInstallment.remaining)}`
+              : latest
+              ? latest.status.replace(/_/g, ' ').toLowerCase()
+              : 'Choose a loan'
           }
           note={
-            !kyc
-              ? 'Required before a loan can be approved'
+            needsKyc
+              ? kyc?.rejectionReason || 'Required before a loan can be approved'
               : nextInstallment
-                ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
-                : latest
-                  ? `Application ${latest.applicationNumber}`
-                  : 'Compare the full repayment first'
+              ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
+              : latest
+              ? `Application ${latest.applicationNumber}`
+              : 'Compare the full repayment first'
           }
         />
         <Summary
@@ -206,6 +222,7 @@ export default function Dashboard() {
           border
         />
       </section>
+      {latest && <ApplicationJourney application={latest} kyc={kyc} />}
       {loans.length > 0 && (
         <section className="surface mt-10 p-6 sm:p-8">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
@@ -283,9 +300,15 @@ export default function Dashboard() {
               <p className="eyebrow">Your activity</p>
               <h2 className="mt-2 text-2xl font-bold text-pata-950">Loan applications</h2>
             </div>
-            <Link href="/loans" className="button button-primary button-small">
-              New application
-            </Link>
+            {hasOpenApplication ? (
+              <span className="text-sm font-semibold text-slate-500">
+                One application at a time
+              </span>
+            ) : (
+              <Link href="/loans" className="button button-primary button-small">
+                New application
+              </Link>
+            )}
           </div>
           {apps.length ? (
             <div className="mt-7 overflow-x-auto">
@@ -330,13 +353,15 @@ export default function Dashboard() {
           <section className="surface p-6">
             <p className="eyebrow">Next step</p>
             <h2 className="mt-2 text-xl font-bold text-pata-950">
-              {!kyc
-                ? 'Verify your identity'
+              {needsKyc
+                ? kyc?.status === 'REJECTED'
+                  ? 'Correct identity details'
+                  : 'Verify your identity'
                 : kyc.status === 'PENDING'
-                  ? 'Identity review in progress'
-                  : 'Identity status'}
+                ? 'Identity review in progress'
+                : 'Identity status'}
             </h2>
-            {kyc ? (
+            {!needsKyc && kyc ? (
               <div className="mt-5">
                 <StatusBadge status={kyc.status} />
                 <p className="mt-3 text-sm leading-6 text-slate-500">
@@ -345,30 +370,39 @@ export default function Dashboard() {
                 </p>
               </div>
             ) : (
-              <form onSubmit={submitKyc} className="mt-5 space-y-4">
-                <label className="field">
-                  <span>ID type</span>
-                  <select name="idType" required>
-                    <option value="">Choose ID type</option>
-                    <option value="NATIONAL_ID">National ID</option>
-                    <option value="PASSPORT">Passport</option>
-                    <option value="DRIVING_LICENSE">Driving licence</option>
-                  </select>
-                </label>
-                <label className="field">
-                  <span>Document number</span>
-                  <input
-                    name="idNumber"
-                    required
-                    minLength={5}
-                    maxLength={50}
-                    pattern="[A-Za-z0-9-]+"
-                    autoComplete="off"
-                  />
-                  <small className="helper">Stored in encrypted form.</small>
-                </label>
-                <button className="button button-primary w-full">Submit for review</button>
-              </form>
+              <>
+                {kyc?.rejectionReason && (
+                  <p className="notice notice-error mt-4" role="alert">
+                    {kyc.rejectionReason}
+                  </p>
+                )}
+                <form onSubmit={submitKyc} className="mt-5 space-y-4">
+                  <label className="field">
+                    <span>ID type</span>
+                    <select name="idType" required>
+                      <option value="">Choose ID type</option>
+                      <option value="NATIONAL_ID">National ID</option>
+                      <option value="PASSPORT">Passport</option>
+                      <option value="DRIVING_LICENSE">Driving licence</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Document number</span>
+                    <input
+                      name="idNumber"
+                      required
+                      minLength={5}
+                      maxLength={50}
+                      pattern="[A-Za-z0-9-]+"
+                      autoComplete="off"
+                    />
+                    <small className="helper">Stored in encrypted form.</small>
+                  </label>
+                  <button className="button button-primary w-full">
+                    {kyc ? 'Resubmit for review' : 'Submit for review'}
+                  </button>
+                </form>
+              </>
             )}
           </section>
           <section className="border-l-2 border-copper bg-[#eee9df] p-6">
@@ -398,12 +432,93 @@ function Summary({
 }) {
   return (
     <div
-      className={`py-7 md:px-8 ${border ? 'border-t border-pata-900/15 md:border-l md:border-t-0' : ''}`}
+      className={`py-7 md:px-8 ${
+        border ? 'border-t border-pata-900/15 md:border-l md:border-t-0' : ''
+      }`}
     >
       <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
       <strong className="mt-2 block text-2xl capitalize text-pata-950">{value}</strong>
       <small className="mt-2 block text-slate-500">{note}</small>
     </div>
+  );
+}
+function ApplicationJourney({ application, kyc }: { application: Application; kyc: Kyc }) {
+  const status = application.status;
+  const decisionReached = ['APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status);
+  const fundsRecorded = ['DISBURSED', 'COMPLETED'].includes(status);
+  const stages = [
+    {
+      label: 'Submitted',
+      detail: new Date(application.createdAt).toLocaleDateString('en-KE'),
+      done: true,
+    },
+    {
+      label: 'Identity and affordability review',
+      detail:
+        kyc?.status === 'APPROVED'
+          ? 'Identity verified'
+          : kyc?.status === 'PENDING'
+          ? 'Identity check pending'
+          : 'Identity action required',
+      done: ['UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status),
+    },
+    {
+      label: status === 'REJECTED' ? 'Not approved' : 'Decision recorded',
+      detail: application.reviewedAt
+        ? new Date(application.reviewedAt).toLocaleDateString('en-KE')
+        : 'Awaiting staff decision',
+      done: decisionReached,
+    },
+    {
+      label: status === 'REJECTED' ? 'Process closed' : 'Funds recorded',
+      detail:
+        status === 'REJECTED'
+          ? 'You may review the explanation and submit a new application'
+          : fundsRecorded
+            ? 'External transfer confirmed'
+            : 'Only after an approved transfer',
+      done: status === 'REJECTED' || fundsRecorded,
+    },
+  ];
+  const current = stages.findIndex((stage) => !stage.done);
+  return (
+    <section className="surface mt-10 p-6 sm:p-8" aria-labelledby="application-progress-title">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div>
+          <p className="eyebrow">Latest application · {application.applicationNumber}</p>
+          <h2 id="application-progress-title" className="mt-2 text-2xl font-bold text-pata-950">
+            Where your application stands
+          </h2>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+      <ol className="mt-7 grid gap-3 md:grid-cols-4" aria-label="Application progress">
+        {stages.map((stage, index) => (
+          <li
+            key={stage.label}
+            aria-current={index === current ? 'step' : undefined}
+            className={`border-t-4 p-4 ${
+              stage.done
+                ? 'border-pata-700 bg-pata-50'
+                : index === current
+                ? 'border-copper bg-[#f7f1e7]'
+                : 'border-slate-200 bg-white'
+            }`}
+          >
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <strong className="mt-2 block text-sm text-pata-950">{stage.label}</strong>
+            <small className="mt-1 block leading-5 text-slate-500">{stage.detail}</small>
+          </li>
+        ))}
+      </ol>
+      {application.rejectionReason && (
+        <div className="notice notice-error mt-5" role="alert">
+          <strong>Decision explanation:</strong> {application.rejectionReason}
+        </div>
+      )}
+    </section>
   );
 }
 function Empty({ title, copy, action }: { title: string; copy: string; action: React.ReactNode }) {

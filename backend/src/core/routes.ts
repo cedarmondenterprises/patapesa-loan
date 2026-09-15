@@ -506,7 +506,13 @@ router.get('/account/overview', requireAuth, async (req: AuthRequest, res, next)
         [id],
       ),
       query(
-        'SELECT la.id,la.application_number AS "applicationNumber",lp.name AS product,la.loan_amount AS amount,la.loan_term AS term,la.purpose,la.status,la.interest_rate AS "interestRate",la.total_amount_payable AS "totalPayable",la.monthly_payment AS "monthlyPayment",la.created_at AS "createdAt" FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id WHERE la.user_id=$1 ORDER BY la.created_at DESC',
+        `SELECT la.id,la.application_number AS "applicationNumber",lp.name AS product,
+         la.loan_amount AS amount,la.loan_term AS term,la.purpose,la.status,
+         la.interest_rate AS "interestRate",la.total_amount_payable AS "totalPayable",
+         la.monthly_payment AS "monthlyPayment",la.rejection_reason AS "rejectionReason",
+         la.reviewed_at AS "reviewedAt",la.created_at AS "createdAt"
+         FROM loan_applications la JOIN loan_products lp ON lp.id=la.product_id
+         WHERE la.user_id=$1 ORDER BY la.created_at DESC`,
         [id],
       ),
       query(

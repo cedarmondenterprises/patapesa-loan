@@ -160,7 +160,7 @@ export default function Loans() {
       setSelected(null);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        await router.push('/login');
+        await router.push({ pathname: '/login', query: { next: '/loans' } });
         return;
       }
       setMessage(error instanceof Error ? error.message : 'Application failed');
@@ -184,7 +184,9 @@ export default function Loans() {
       <AdSlot slot="LOANS_BELOW_HEADER" />
       {message && (
         <p
-          className={`notice mt-8 ${message.includes('reference') ? 'notice-success' : 'notice-error'}`}
+          className={`notice mt-8 ${
+            message.includes('reference') ? 'notice-success' : 'notice-error'
+          }`}
         >
           {message}
         </p>
