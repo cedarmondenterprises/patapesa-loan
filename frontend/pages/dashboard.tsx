@@ -120,8 +120,9 @@ export default function Dashboard() {
   async function signOut() {
     try {
       await logout();
-    } finally {
       await router.push('/');
+    } catch {
+      setMessage('Sign out could not be completed. Please try again.');
     }
   }
   const latest = apps[0],

@@ -575,3 +575,14 @@ VALUES
  ('PERSONAL','Personal loan','Flexible credit for planned personal expenses.',10000,500000,3,24,15,2.5,5,'KES'),
  ('BUSINESS','Business loan','Working capital for established small businesses.',50000,1000000,6,36,12,2,5,'KES')
 ON CONFLICT(product_code) DO UPDATE SET name=EXCLUDED.name,description=EXCLUDED.description,min_amount=EXCLUDED.min_amount,max_amount=EXCLUDED.max_amount,min_term=EXCLUDED.min_term,max_term=EXCLUDED.max_term,interest_rate=EXCLUDED.interest_rate,processing_fee=EXCLUDED.processing_fee,status='ACTIVE',updated_at=NOW();
+
+-- Server-tracked sessions: deleting a row immediately revokes a copied cookie.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
+DELETE FROM auth_sessions WHERE expires_at <= NOW();
