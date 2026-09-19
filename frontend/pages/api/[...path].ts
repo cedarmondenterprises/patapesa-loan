@@ -31,7 +31,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const upstream = await fetch(target, {
       method: req.method,
       headers,
-      body: ['GET', 'HEAD'].includes(req.method || 'GET') ? undefined : JSON.stringify(req.body),
+      // Next represents an empty non-JSON request as ''. Do not serialize it
+      // as a JSON string: Express rejects scalar JSON before reaching logout.
+      body: ['GET', 'HEAD'].includes(req.method || 'GET') || req.body === '' || req.body == null
+        ? undefined
+        : JSON.stringify(req.body),
       signal: AbortSignal.timeout(15_000),
     });
     const cookie = upstream.headers.get('set-cookie');
