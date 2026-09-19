@@ -181,3 +181,26 @@ cd ../admin && npm ci && npm run type-check && npm run lint && npm run build && 
 ```
 
 Technical hardening does not replace lending authorization, customer disclosures, underwriting, complaints handling, data-protection impact assessment, retention rules, payment-provider approval, monitoring, backups, or an internal staff workflow. Complete those operational and legal controls before accepting real customers or money.
+
+### Session and proxy update (September 2026)
+
+Authentication now requires a server-tracked session. Deploy the backend and both
+web apps together, then reload Caddy to apply its Cloudflare trust list; startup migration creates `auth_sessions` before serving traffic.
+Existing standalone cookies require one new login. Logout revokes only the current
+session; password resets/account auth-version changes still invalidate all sessions.
+Database failures preserve the cookie and return 503 rather than signing users out.
+Expired session rows are pruned during startup migration.
+
+The backend trusts loopback/private Docker hops and the published Cloudflare ranges
+in `backend/src/core/proxy.ts`. Keep the backend and Next.js ports private, and ensure
+the outer reverse proxy overwrites or appends the real TCP peer to X-Forwarded-For.
+Both Next.js proxies append their TCP peer. Client-provided CF-Connecting-IP is never
+used directly. Review Cloudflare ranges when infrastructure changes; do not replace
+this configuration with unrestricted proxy trust. Rate limits are process-local;
+multiple backend replicas require a shared limiter store before scaling out.
+
+General requests allow 600 per 15 minutes to accommodate admin queue polling.
+Failed login attempts remain limited to 10 per 15 minutes per client network;
+successful logins do not consume that quota. Registration/reset requests keep their
+own bounded quota. Health probes and logout do not consume the general quota.
+Both portals pass through Retry-After and show a sign-in retry countdown.

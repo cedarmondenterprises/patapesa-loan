@@ -207,8 +207,12 @@ export default function Dashboard() {
     }
   }
   async function signout() {
-    await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
-    await router.push('/');
+    try {
+      await api('/auth/logout', { method: 'POST' });
+      await router.push('/');
+    } catch {
+      setMessage('Sign out could not be completed. Please try again.');
+    }
   }
   const filtered = useMemo(() => {
     const q = query.toLowerCase();

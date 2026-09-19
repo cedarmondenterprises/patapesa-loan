@@ -10,13 +10,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const item of Array.isArray(value) ? value : [value])
       if (item !== undefined) query.append(key, item);
   }
-  const target = `${backendUrl}/api/${segments.map((segment) => encodeURIComponent(segment || '')).join('/')}${query.size ? `?${query}` : ''}`;
+  const target = `${backendUrl}/api/${segments
+    .map((segment) => encodeURIComponent(segment || ''))
+    .join('/')}${query.size ? `?${query}` : ''}`;
   const headers: Record<string, string> = { accept: req.headers.accept || 'application/json' };
   if (req.headers.cookie) headers.cookie = req.headers.cookie;
   if (req.headers['user-agent']) headers['user-agent'] = req.headers['user-agent'];
   if (req.headers['x-request-id']) headers['x-request-id'] = String(req.headers['x-request-id']);
-  if (req.headers['x-forwarded-for'])
-    headers['x-forwarded-for'] = String(req.headers['x-forwarded-for']);
+  headers['x-forwarded-for'] = [req.headers['x-forwarded-for'], req.socket.remoteAddress]
+    .filter(Boolean)
+    .join(', ');
   if (req.headers['x-forwarded-proto'])
     headers['x-forwarded-proto'] = String(req.headers['x-forwarded-proto']);
   headers.origin = String(

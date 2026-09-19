@@ -8,7 +8,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const item of Array.isArray(value) ? value : [value])
       if (item !== undefined) query.append(key, item);
   }
-  const target = `${backend}/api/${parts.map((x) => encodeURIComponent(x || '')).join('/')}${query.size ? `?${query}` : ''}`;
+  const target = `${backend}/api/${parts.map((x) => encodeURIComponent(x || '')).join('/')}${
+    query.size ? `?${query}` : ''
+  }`;
   try {
     const upstream = await fetch(target, {
       method: req.method,
@@ -18,12 +20,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         cookie: req.headers.cookie || '',
         'user-agent': req.headers['user-agent'] || '',
         origin: String(req.headers.origin || process.env.ADMIN_APP_URL || 'http://localhost:3001'),
-        'x-forwarded-for': String(req.headers['x-forwarded-for'] || ''),
+        'x-forwarded-for': [req.headers['x-forwarded-for'], req.socket.remoteAddress]
+          .filter(Boolean)
+          .join(', '),
         'x-forwarded-proto': String(req.headers['x-forwarded-proto'] || ''),
       },
       body: ['GET', 'HEAD'].includes(req.method || 'GET') ? undefined : JSON.stringify(req.body),
       signal: AbortSignal.timeout(15000),
     });
+    for (const name of [
+      'retry-after',
+      'ratelimit-limit',
+      'ratelimit-remaining',
+      'ratelimit-reset',
+      'x-request-id',
+    ]) {
+      const value = upstream.headers.get(name);
+      if (value) res.setHeader(name, value);
+    }
     const cookie = upstream.headers.get('set-cookie');
     if (cookie) res.setHeader('set-cookie', cookie);
     const contentType = upstream.headers.get('content-type');

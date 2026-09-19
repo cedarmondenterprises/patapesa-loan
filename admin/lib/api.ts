@@ -1,8 +1,5 @@
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
+  constructor(message: string, public status: number, public readonly retryAfterSeconds = 0) {
     super(message);
   }
 }
@@ -26,7 +23,23 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       if (retryableStatuses.has(response.status) && attempt + 1 < attempts) continue;
       if (response.status === 204) return undefined as T;
       const data = await response.json().catch(() => ({ message: 'Invalid server response' }));
-      if (!response.ok) throw new ApiError(data.message || 'Request failed', response.status);
+      if (!response.ok) {
+        const value = response.headers.get('retry-after');
+        const seconds =
+          value && /^\d+$/.test(value)
+            ? Number(value)
+            : value
+            ? Math.ceil((Date.parse(value) - Date.now()) / 1000)
+            : 0;
+        const retryAfter = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+        throw new ApiError(
+          response.status === 429
+            ? `Too many attempts. Try again in ${retryAfter || 60} seconds.`
+            : data.message || 'Request failed',
+          response.status,
+          response.status === 429 ? retryAfter || 60 : 0,
+        );
+      }
       return data;
     } catch (error) {
       if (error instanceof ApiError) throw error;

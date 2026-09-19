@@ -9,7 +9,7 @@ function loginErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : 'Sign in failed. Please try again.';
   if (error.status === 400) return 'Enter a valid email address and your password.';
   if (error.status === 401) return 'The email address or password is incorrect.';
-  if (error.status === 429) return 'Too many sign-in attempts. Wait a few minutes and try again.';
+
   return error.message;
 }
 
@@ -27,7 +27,13 @@ export default function Login() {
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
     [checkingSession, setCheckingSession] = useState(true),
-    [show, setShow] = useState(false);
+    [show, setShow] = useState(false),
+    [retryAfter, setRetryAfter] = useState(0);
+  useEffect(() => {
+    if (!retryAfter) return;
+    const timer = window.setTimeout(() => setRetryAfter((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [retryAfter]);
   const destination = useMemo(() => {
     return safeDestination(router.query.next);
   }, [router.query.next]);
@@ -35,7 +41,9 @@ export default function Login() {
     if (!router.isReady) return;
     let active = true;
     api('/auth/me')
-      .then(() => router.replace(destination))
+      .then(() => {
+        if (active) return router.replace(destination);
+      })
       .catch(() => {
         if (active) setCheckingSession(false);
       });
@@ -45,10 +53,11 @@ export default function Login() {
   }, [destination, router]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (checkingSession || loading) return;
+    if (checkingSession || loading || retryAfter > 0) return;
     setLoading(true);
     setMessage('');
     const form = new FormData(e.currentTarget);
+    let authenticated = false;
     try {
       await api('/auth/login', {
         method: 'POST',
@@ -60,10 +69,16 @@ export default function Login() {
           remember: form.get('remember') === 'on',
         }),
       });
+      authenticated = true;
       await api('/auth/me');
       await router.replace(destination);
     } catch (error) {
-      setMessage(loginErrorMessage(error));
+      if (error instanceof ApiError && error.status === 429) setRetryAfter(error.retryAfterSeconds);
+      setMessage(
+        authenticated && error instanceof ApiError && error.status === 401
+          ? 'Your login succeeded but the session cookie was not accepted. Enable cookies and try again.'
+          : loginErrorMessage(error),
+      );
     } finally {
       setLoading(false);
     }
@@ -136,12 +151,17 @@ export default function Login() {
             Forgot password?
           </Link>
         </div>
-        <button disabled={checkingSession || loading} className="button button-primary w-full">
-          {checkingSession
+        <button
+          disabled={checkingSession || loading || retryAfter > 0}
+          className="button button-primary w-full"
+        >
+          {retryAfter > 0
+            ? `Try again in ${retryAfter}s`
+            : checkingSession
             ? 'Checking your session…'
             : loading
-              ? 'Signing in…'
-              : 'Sign in securely'}
+            ? 'Signing in…'
+            : 'Sign in securely'}
         </button>
       </form>
       <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">

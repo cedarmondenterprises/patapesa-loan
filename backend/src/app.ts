@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import { trustedProxies } from './core/proxy';
 import routes from './core/routes';
 import { config } from './core/config';
 import { pool } from './core/db';
@@ -11,7 +12,7 @@ import { metricsMiddleware } from './core/metrics';
 
 const app = express();
 app.disable('x-powered-by');
-app.set('trust proxy', 1);
+app.set('trust proxy', trustedProxies);
 app.use((req, res, next) => {
   const id = req.get('x-request-id')?.slice(0, 100) || randomUUID();
   res.setHeader('x-request-id', id);
@@ -44,7 +45,15 @@ app.use(
   }),
 );
 app.use(
-  rateLimit({ windowMs: 15 * 60 * 1000, limit: 150, standardHeaders: true, legacyHeaders: false }),
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    // Admin refresh loads several queues every 30 seconds.
+    limit: 600,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => ['/api/health', '/api/health/live', '/api/auth/logout'].includes(req.path),
+    message: { success: false, message: 'Too many requests. Please wait before trying again.' },
+  }),
 );
 if (config.nodeEnv !== 'test') app.use(morgan(config.isProduction ? 'combined' : 'dev'));
 app.use(express.json({ limit: '100kb' }));
