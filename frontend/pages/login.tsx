@@ -87,7 +87,7 @@ export default function Login() {
     <AuthShell
       title="Sign in"
       eyebrow="Your PataPesa account"
-      heading="Pick up exactly where you left off."
+      heading="Your account. Your next step."
       copy="Review an application, complete identity verification and see every lending decision in one secure place."
     >
       <p className="eyebrow">Customer sign in</p>
@@ -166,7 +166,7 @@ export default function Login() {
       </form>
       <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">
         New to PataPesa?{' '}
-        <Link className="font-bold text-pata-700" href="/register">
+        <Link className="font-bold text-pata-700" href={destination === '/loans' ? '/register?next=loans' : '/register'}>
           Create an account
         </Link>
       </p>

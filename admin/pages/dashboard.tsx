@@ -75,6 +75,8 @@ const approvalBlockers = (row: Row): string[] =>
 export default function Dashboard() {
   const router = useRouter(),
     [tab, setTab] = useState('Overview'),
+    [menuOpen, setMenuOpen] = useState(false),
+    [refreshWarning, setRefreshWarning] = useState(false),
     [metrics, setMetrics] = useState<Metrics>({}),
     [users, setUsers] = useState<Row[]>([]),
     [apps, setApps] = useState<Row[]>([]),
@@ -99,9 +101,11 @@ export default function Dashboard() {
       .then((r) => r.data)
       .catch((error) => {
         if (error instanceof ApiError && error.status === 401) throw error;
+        setRefreshWarning(true);
         return null;
       });
   async function load(background = false) {
+    setRefreshWarning(false);
     try {
       const me = await api<{ data: { roles: string[]; permissions: string[] } }>('/admin/me');
       const currentPermissions = me.data.permissions;
@@ -263,8 +267,8 @@ export default function Dashboard() {
   );
   const counts: Record<string, number> = {
     Registrations: users.filter((u) => u.registrationReference).length,
-    'Loan review': apps.length,
-    'KYC review': kyc.length,
+    'Loan review': apps.filter((a) => ['SUBMITTED', 'UNDER_REVIEW'].includes(String(a.status))).length,
+    'KYC review': kyc.filter((k) => ['PENDING', 'UNDER_REVIEW'].includes(String(k.status))).length,
     Repayments: payments.filter((payment) =>
       ['PENDING', 'PROCESSING'].includes(String(payment.status)),
     ).length,
@@ -301,8 +305,9 @@ export default function Dashboard() {
   }
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
         <Brand />
+        <button className="admin-menu-toggle" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? 'Close navigation' : 'Open navigation'}</button>
         {groups.map((g) => (
           <div className="nav-group" key={g.label}>
             <span className="nav-label">{g.label}</span>
@@ -311,9 +316,11 @@ export default function Dashboard() {
               .map((x) => (
                 <button
                   key={x}
+                  aria-current={tab === x ? 'page' : undefined}
                   className={tab === x ? 'active' : ''}
                   onClick={() => {
                     setTab(x);
+                    setMenuOpen(false);
                     setQuery('');
                     if (x !== 'KYC review') setRevealedKyc({});
                   }}
@@ -343,10 +350,11 @@ export default function Dashboard() {
           <div>
             <p className="overline">PataPesa operations</p>
             <h1>{tab}</h1>
-            {lastSync && <small>Live data · updated {lastSync.toLocaleTimeString('en-KE')}</small>}
+            {lastSync && <small>Last refreshed {lastSync.toLocaleTimeString('en-KE')}</small>}
           </div>
           <span className="role-badge">{(roles[0] || 'STAFF').replace('_', ' ')}</span>
         </header>
+        {refreshWarning && <div className="refresh-warning" role="alert">Some sections could not be refreshed. Figures may be incomplete or out of date. <button onClick={() => void load()}>Try again</button></div>}
         {message && (
           <div className="toast" role="status">
             {message}
