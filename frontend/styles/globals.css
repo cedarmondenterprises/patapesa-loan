@@ -5,13 +5,13 @@
 :root {
   --ink: #101828;
   --muted: #667085;
-  --line: #d9e2f2;
+  --line: #dce2dc;
   --paper: #ffffff;
-  --canvas: #f5f7fc;
-  --forest: #0b1f4b;
-  --forest-hover: #07132f;
-  --copper: #1d4ed8;
-  --copper-bright: #ff6b35;
+  --canvas: #f7f8f5;
+  --forest: #16332f;
+  --forest-hover: #102622;
+  --copper: #176b55;
+  --copper-bright: #176b55;
 }
 * {
   box-sizing: border-box;
@@ -23,7 +23,8 @@ body {
   margin: 0;
   color: var(--ink);
   background: var(--canvas);
-  font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 a {
@@ -41,7 +42,7 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-  outline: 3px solid rgba(223, 79, 47, 0.38);
+  outline: 3px solid #176b55;
   outline-offset: 3px;
 }
 
@@ -152,7 +153,7 @@ a {
   box-shadow: none;
 }
 .button-primary:hover {
-  background: #173ca8;
+  background: #104c3d;
   transform: translateY(-1px);
 }
 .button-secondary {
@@ -162,7 +163,7 @@ a {
   border-color: #b8c6e3;
 }
 .button-secondary:hover {
-  background: #eef4ff;
+  background: #edf4f0;
   border-color: var(--forest);
 }
 .button-small {
@@ -911,8 +912,8 @@ textarea.field-control {
 }
 .notice-success {
   background: #eff4ff;
-  border-color: #1d4ed8;
-  color: #173ca8;
+  border-color: #176b55;
+  color: #104c3d;
 }
 .notice-error {
   background: #fff1ef;
@@ -1013,7 +1014,7 @@ textarea.field-control {
   height: 17px;
   margin-top: 1px;
   flex: 0 0 auto;
-  accent-color: #1d4ed8;
+  accent-color: #176b55;
 }
 
 .application-tracker {
@@ -1041,8 +1042,8 @@ textarea.field-control {
   overflow-wrap: anywhere;
 }
 .application-current {
-  --current-accent: #2563eb;
-  --current-bg: #eef4ff;
+  --current-accent: #176b55;
+  --current-bg: #edf4f0;
   display: grid;
   gap: 22px;
   margin-top: 26px;
@@ -1113,7 +1114,7 @@ textarea.field-control {
   font-weight: 750;
 }
 .application-progress-label span:last-child {
-  color: #1d4ed8;
+  color: #176b55;
 }
 .application-progress-track {
   height: 8px;
@@ -1125,7 +1126,7 @@ textarea.field-control {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  background: linear-gradient(90deg, #176b55, #3b82f6);
   transition: width 300ms ease;
 }
 .application-timeline {
@@ -1169,10 +1170,10 @@ textarea.field-control {
   background: #15805a;
 }
 .application-stage-current .application-stage-marker {
-  border: 7px solid #dce8ff;
+  border: 7px solid #dcebe3;
   color: white;
-  background: #2563eb;
-  box-shadow: 0 0 0 2px #2563eb;
+  background: #176b55;
+  box-shadow: 0 0 0 2px #176b55;
 }
 .application-stage-attention .application-stage-marker {
   border-color: #c24135;
@@ -1192,7 +1193,7 @@ textarea.field-control {
   color: #15805a;
 }
 .application-stage-current .application-stage-state {
-  color: #1d4ed8;
+  color: #176b55;
 }
 .application-stage-attention .application-stage-state {
   color: #b13b31;
@@ -1577,10 +1578,10 @@ textarea.field-control {
   --muted: #667085;
   --line: #d6deee;
   --paper: #ffffff;
-  --canvas: #f5f7fc;
-  --forest: #0b1f4b;
-  --forest-hover: #07132f;
-  --copper: #ff5a36;
+  --canvas: #f7f8f5;
+  --forest: #16332f;
+  --forest-hover: #102622;
+  --copper: #176b55;
   --copper-bright: #ff6b45;
 }
 .site-header {
@@ -2217,7 +2218,7 @@ textarea.field-control {
   justify-content: space-between;
   gap: 28px;
   color: #fff;
-  background: #07132f;
+  background: #102622;
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: 0 18px 60px rgba(7, 19, 47, 0.32);
 }

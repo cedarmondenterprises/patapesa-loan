@@ -1,7 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Layout from '../components/Layout';
-import AdSlot from '../components/AdSlot';
+import Link from 'next/link';
 import { api, ApiError } from '../lib/api';
 
 type Product = {
@@ -31,6 +31,7 @@ type LoanDraft = {
 };
 
 export default function Loans() {
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const router = useRouter(),
     [products, setProducts] = useState<Product[]>([]),
     [selected, setSelected] = useState<Product | null>(null),
@@ -47,26 +48,62 @@ export default function Loans() {
     [message, setMessage] = useState(''),
     [loading, setLoading] = useState(false),
     [loadingProducts, setLoadingProducts] = useState(true);
+  const requestedProduct = router.query.product;
+  const requestedAmount = router.query.amount;
+  const requestedTerm = router.query.term;
   useEffect(() => {
+    if (!router.isReady) return;
     api<{ data: Product[] }>('/products')
       .then((r) => {
         setProducts(r.data);
+        const requested = r.data.find((p) => p.id === requestedProduct);
+        let restored = false;
         try {
           const draft = JSON.parse(sessionStorage.getItem(draftKey) || 'null') as LoanDraft | null;
           const product = draft && r.data.find((item) => item.id === draft.productId);
-          if (draft && product) {
+          if (draft && product && (!requested || requested.id === product.id)) {
             setSelected(product);
             setRequestId(draft.requestId || crypto.randomUUID());
             setStep(draft.step === 2 ? 2 : 1);
-            setAmount(draft.amount);
-            setTerm(draft.term);
-            setPurposeCategory(draft.purposeCategory);
-            setPurpose(draft.purpose);
-            setRepaymentSource(draft.repaymentSource);
-            setExistingMonthlyDebt(draft.existingMonthlyDebt);
+            setAmount(
+              Number.isFinite(draft.amount)
+                ? Math.max(
+                    Number(product.minAmount),
+                    Math.min(draft.amount, Number(product.maxAmount)),
+                  )
+                : Number(product.minAmount),
+            );
+            setTerm(
+              Number.isFinite(draft.term)
+                ? Math.max(product.minTerm, Math.min(Math.round(draft.term), product.maxTerm))
+                : product.minTerm,
+            );
+            setPurposeCategory(draft.purposeCategory || '');
+            setPurpose(draft.purpose || '');
+            setRepaymentSource(draft.repaymentSource || '');
+            setExistingMonthlyDebt(
+              Number.isFinite(draft.existingMonthlyDebt) ? draft.existingMonthlyDebt : 0,
+            );
+            restored = true;
           }
         } catch {
-          sessionStorage.removeItem(draftKey);
+          /* Storage can be unavailable; keep the application usable. */
+        }
+        if (requested && !restored) {
+          setSelected(requested);
+          const n = Number(requestedAmount),
+            t = Number(requestedTerm);
+          setAmount(
+            Number.isFinite(n)
+              ? Math.max(Number(requested.minAmount), Math.min(n, Number(requested.maxAmount)))
+              : Number(requested.minAmount),
+          );
+          setTerm(
+            Number.isFinite(t)
+              ? Math.max(requested.minTerm, Math.min(Math.round(t), requested.maxTerm))
+              : requested.minTerm,
+          );
+          setRequestId(crypto.randomUUID());
         }
       })
       .catch((e) => setMessage(e.message))
@@ -74,7 +111,7 @@ export default function Loans() {
         setDraftReady(true);
         setLoadingProducts(false);
       });
-  }, []);
+  }, [router.isReady, requestedProduct, requestedAmount, requestedTerm]);
   useEffect(() => {
     if (!draftReady || !selected) return;
     const timeout = window.setTimeout(() => {
@@ -89,7 +126,11 @@ export default function Loans() {
         repaymentSource,
         existingMonthlyDebt,
       };
-      sessionStorage.setItem(draftKey, JSON.stringify(draft));
+      try {
+        sessionStorage.setItem(draftKey, JSON.stringify(draft));
+      } catch {
+        /* Optional draft storage. */
+      }
     }, 250);
     return () => window.clearTimeout(timeout);
   }, [
@@ -104,6 +145,9 @@ export default function Loans() {
     step,
     term,
   ]);
+  useEffect(() => {
+    if (selected) headingRef.current?.focus();
+  }, [selected, step]);
   const quote = useMemo(() => {
     if (!selected) return null;
     const interest = amount * (Number(selected.interestRate) / 100) * (term / 12),
@@ -125,7 +169,11 @@ export default function Loans() {
     setMessage('');
   }
   function cancelApplication() {
-    sessionStorage.removeItem(draftKey);
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {
+      /* Optional draft storage. */
+    }
     setSelected(null);
     setStep(1);
     setMessage('');
@@ -156,7 +204,11 @@ export default function Loans() {
         },
       );
       setMessage(`${r.message}. Your reference is ${r.data.applicationNumber}.`);
-      sessionStorage.removeItem(draftKey);
+      try {
+        sessionStorage.removeItem(draftKey);
+      } catch {
+        /* Optional draft storage. */
+      }
       setSelected(null);
       const moved = await router.push('/dashboard#application-progress');
       if (!moved)
@@ -186,9 +238,10 @@ export default function Loans() {
           subject to identity and affordability checks.
         </p>
       </header>
-      <AdSlot slot="LOANS_BELOW_HEADER" />
+
       {message && (
         <p
+          role="alert"
           className={`notice mt-8 ${
             message.includes('reference') ? 'notice-success' : 'notice-error'
           }`}
@@ -196,65 +249,65 @@ export default function Loans() {
           {message}
         </p>
       )}
-      <div className="mt-10 border-t border-pata-900/15">
-        {loadingProducts
-          ? [1, 2, 3].map((x) => <div key={x} className="skeleton my-3 h-32" />)
-          : products.map((p, i) => (
-              <article
-                key={p.id}
-                className="grid items-center gap-6 border-b border-pata-900/15 py-8 md:grid-cols-[44px_1.35fr_1fr_1fr_auto]"
-              >
-                <span className="font-mono text-xs text-copper">0{i + 1}</span>
-                <div>
-                  <h2 className="text-2xl font-bold text-pata-900">{p.name}</h2>
-                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{p.description}</p>
-                </div>
-                <div>
-                  <small className="text-slate-500">Available amount</small>
-                  <strong className="mt-1 block text-sm">
-                    KES {Number(p.minAmount).toLocaleString()}–
-                    {Number(p.maxAmount).toLocaleString()}
-                  </strong>
-                </div>
-                <div>
-                  <small className="text-slate-500">Cost and period</small>
-                  <strong className="mt-1 block text-sm">
-                    {p.interestRate}% p.a. · {p.processingFee || 0}% fee
-                  </strong>
-                  <span className="text-sm text-slate-500">
-                    {p.minTerm}–{p.maxTerm} months
-                  </span>
-                </div>
-                <button onClick={() => choose(p)} className="button button-primary button-small">
-                  Calculate
-                </button>
-              </article>
-            ))}
-      </div>
+      {!selected && (
+        <div className="product-list">
+          {loadingProducts
+            ? [1, 2, 3].map((x) => <div key={x} className="skeleton my-3 h-32" />)
+            : products.map((p) => (
+                <article key={p.id} className="product-row">
+                  <div>
+                    <h2 className="text-2xl font-bold text-pata-900">{p.name}</h2>
+                    <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+                      {p.description}
+                    </p>
+                  </div>
+                  <div>
+                    <small className="text-slate-500">Available amount</small>
+                    <strong className="mt-1 block text-sm">
+                      KES {Number(p.minAmount).toLocaleString()}–
+                      {Number(p.maxAmount).toLocaleString()}
+                    </strong>
+                  </div>
+                  <div>
+                    <small className="text-slate-500">Cost and period</small>
+                    <strong className="mt-1 block text-sm">
+                      {p.interestRate}% p.a. · {p.processingFee || 0}% fee
+                    </strong>
+                    <span className="text-sm text-slate-500">
+                      {p.minTerm}–{p.maxTerm} months
+                    </span>
+                  </div>
+                  <button onClick={() => choose(p)} className="button button-primary button-small">
+                    Calculate
+                  </button>
+                </article>
+              ))}
+        </div>
+      )}
       {selected && (
-        <div
-          className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-[#071d18]/75 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="application-title"
-        >
-          <form onSubmit={apply} className="my-6 w-full max-w-xl bg-[#fffdf7] shadow-2xl">
-            <div className="flex items-start justify-between border-b border-pata-900/10 px-7 py-6">
+        <div className="application-layout">
+          <form onSubmit={apply} className="application-form">
+            <div className="application-form-heading flex items-start justify-between border-b border-pata-900/10 px-7 py-6">
               <div>
                 <p className="eyebrow">Step {step} of 2</p>
-                <h2 id="application-title" className="mt-2 text-2xl font-bold text-pata-900">
+                <h2
+                  ref={headingRef}
+                  tabIndex={-1}
+                  id="application-title"
+                  className="mt-2 text-2xl font-bold text-pata-900"
+                >
                   {step === 1
-                    ? `Plan your ${selected.name.toLowerCase()} loan`
+                    ? `Your ${selected.name.toLowerCase()} application`
                     : 'Check your application'}
                 </h2>
               </div>
               <button
                 type="button"
-                aria-label="Close"
+                aria-label="Back to loan options"
                 onClick={cancelApplication}
-                className="text-2xl text-slate-500"
+                className="button button-secondary button-small"
               >
-                ×
+                Back
               </button>
             </div>
             <div className="h-1 bg-slate-200">
@@ -355,6 +408,8 @@ export default function Loans() {
                 <dl className="divide-y divide-pata-900/10 border-y border-pata-900/10">
                   {[
                     ['Loan amount', kes(amount)],
+                    ['Repayment period', `${term} months`],
+                    ['Annual flat interest rate', `${selected.interestRate}% (not APR)`],
                     ['Estimated interest', kes(quote?.interest || 0)],
                     ['Processing fee', kes(quote?.fee || 0)],
                     ['Estimated monthly payment', kes(quote?.monthly || 0)],
@@ -367,7 +422,7 @@ export default function Loans() {
                     </div>
                   ))}
                 </dl>
-                <div className="mt-6 bg-[#eee9df] p-4 text-sm leading-6">
+                <div className="mt-6 bg-pata-50 p-4 text-sm leading-6">
                   <strong>{purposeCategory.replace(/_/g, ' ')} purpose</strong>
                   <p className="mt-1 text-slate-600">{purpose}</p>
                   <p className="mt-3 text-slate-600">
@@ -384,7 +439,7 @@ export default function Loans() {
                     checked={declarationAccepted}
                     onChange={(e) => setDeclarationAccepted(e.target.checked)}
                     required
-                    className="mt-1 h-4 w-4 accent-[#123c32]"
+                    className="mt-1 h-4 w-4 accent-[#176b55]"
                   />
                   <span>
                     I confirm that the amount, purpose, repayment source and existing debt
@@ -406,9 +461,41 @@ export default function Loans() {
               </button>
             </div>
             <p className="m-0 border-t border-pata-900/10 px-7 py-3 text-center text-xs text-slate-500">
-              Your unfinished answers survive a refresh in this browser tab.
+              Drafts are saved in this tab when browser storage is available.
             </p>
           </form>
+          <aside className="application-aside">
+            <p className="eyebrow">Cost at a glance</p>
+            <h3>{selected.name}</h3>
+            <dl className="cost-breakdown">
+              <div>
+                <dt>Monthly estimate</dt>
+                <dd>{kes(quote?.monthly || 0)}</dd>
+              </div>
+              <div>
+                <dt>Interest</dt>
+                <dd>{kes(quote?.interest || 0)}</dd>
+              </div>
+              <div>
+                <dt>Fee</dt>
+                <dd>{kes(quote?.fee || 0)}</dd>
+              </div>
+              <div className="cost-total">
+                <dt>Total repayment</dt>
+                <dd>{kes(quote?.total || 0)}</dd>
+              </div>
+            </dl>
+            <p>
+              This application is a request for review. It is not a binding loan agreement or a
+              promise of approval.
+            </p>
+            <p>
+              Need an account? Your application draft stays in this browser tab while you register.
+            </p>
+            <Link href="/register?next=loans">Create an account →</Link>
+            <br />
+            <Link href="/login?next=%2Floans">Sign in →</Link>
+          </aside>
         </div>
       )}
     </Layout>

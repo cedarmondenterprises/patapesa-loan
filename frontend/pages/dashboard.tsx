@@ -156,7 +156,7 @@ export default function Dashboard() {
         <div>
           <p className="eyebrow">Customer account</p>
           <h1 className="mt-2 text-4xl font-bold tracking-[-.035em] text-pata-950">
-            Good to see you, {user?.firstName}.
+            {user?.firstName}’s account
           </h1>
           <p className="mt-2 text-sm text-slate-500">
             {user?.email} · {user?.phone}
@@ -173,10 +173,11 @@ export default function Dashboard() {
           </button>
         </div>
       </header>
+      <nav className="account-shortcuts" aria-label="Account sections">{latest && <a href="#application-progress">Application status</a>}{loans.length > 0 && <a href="#repayments">Repayments</a>}<a href="#identity-verification">Identity details</a><Link href="/contact">Get help</Link></nav>
       {message && (
         <p
           className={`notice mt-6 ${
-            message.toLowerCase().includes('failed') ? 'notice-error' : 'notice-success'
+            /failed|could not|unable|error/i.test(message) ? 'notice-error' : 'notice-success'
           }`}
         >
           {message}
@@ -236,7 +237,7 @@ export default function Dashboard() {
       </section>
       {latest && <ApplicationJourney application={latest} kyc={kyc} />}
       {loans.length > 0 && (
-        <section className="surface mt-10 p-6 sm:p-8">
+        <section id="repayments" className="surface mt-10 p-6 sm:p-8">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
               <p className="eyebrow">Repayment overview</p>
