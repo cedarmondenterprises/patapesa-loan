@@ -8,7 +8,8 @@ export default function App({ Component, pageProps }: AppProps) {
       <Head>
         <title>PataPesa Administration</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#0a1c2c" />
+        <meta name="theme-color" content="#16332f" />
+        <meta name="robots" content="noindex, nofollow" />
         <link rel="icon" href="/favicon.svg" />
       </Head>
       <ConnectionBanner />

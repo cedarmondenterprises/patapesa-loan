@@ -20,7 +20,7 @@ export default function AuthShell({
   return (
     <>
       <Head>
-        <title>{title} | PataPesa</title>
+        <title>{`${title} | PataPesa`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="theme-color" content="#16332f" />
         <meta name="robots" content="noindex, nofollow" />

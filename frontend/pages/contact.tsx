@@ -27,7 +27,10 @@ export default function Contact() {
     }
   }
   return (
-    <Layout title="Contact | PataPesa">
+    <Layout
+      title="Contact PataPesa support | Kenya"
+      description="Contact PataPesa support about a Kenyan loan application, account access or repayment question. Submit the form and keep your support reference."
+    >
       <div className="mx-auto max-w-2xl pt-12">
         <p className="eyebrow">Customer care</p>
         <h1 className="section-heading mt-3">Contact support</h1>

@@ -2,7 +2,10 @@ import Link from 'next/link';
 import InfoPage from '../components/InfoPage';
 export default function About() {
   return (
-    <InfoPage title="How borrowing with PataPesa works">
+    <InfoPage
+      title="How borrowing with PataPesa works"
+      description="See how a PataPesa loan estimate becomes an application, how identity and affordability reviews work, and where to track a decision in Kenya."
+    >
       <p>
         From your first estimate to your account, each step has a clear purpose. An estimate or
         application is not a guarantee of approval.

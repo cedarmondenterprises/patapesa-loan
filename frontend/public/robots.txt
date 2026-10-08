@@ -4,8 +4,7 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /dashboard
-Disallow: /reset-password
+
+# Account pages use noindex in their HTML. Crawlers must be able to read that rule.
 
 Sitemap: https://cedarmondtv.site/sitemap.xml
-Host: cedarmondtv.site

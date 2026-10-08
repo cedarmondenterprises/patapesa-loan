@@ -40,7 +40,10 @@ const questions = [
 ];
 export default function Faq() {
   return (
-    <InfoPage title="Help with your loan journey">
+    <InfoPage
+      title="Help with your loan journey"
+      description="Answers to common questions about PataPesa loan estimates, Kenyan National ID registration, application reviews, progress tracking and repayments."
+    >
       <p>Answers about estimates, applications and repayments.</p>
       {questions.map(([question, answer]) => (
         <details className="help-question" key={question}>

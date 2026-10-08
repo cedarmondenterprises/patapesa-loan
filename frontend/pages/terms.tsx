@@ -1,7 +1,10 @@
 import InfoPage from '../components/InfoPage';
 export default function Terms() {
   return (
-    <InfoPage title="Terms of use">
+    <InfoPage
+      title="Terms of use"
+      description="Review the PataPesa platform terms for account security, loan applications, registration declarations and repayment obligations before using the service."
+    >
       <p>
         These terms govern access to the PataPesa application platform. You must provide accurate
         information and keep your credentials secure.
