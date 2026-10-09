@@ -31,6 +31,10 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
+      - name: Build backend image with restricted checkout permissions
+        run: |
+          chmod 600 schema.sql
+          docker build --tag patapesa-backend-permissions .
 
   frontend:
     runs-on: ubuntu-latest
