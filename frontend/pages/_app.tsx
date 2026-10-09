@@ -4,6 +4,7 @@ import RouteProgress from '../components/RouteProgress';
 import { TrackingAndAds } from '../components/TrackingAndAds';
 import '../styles/globals.css';
 import '../styles/design-system.css';
+import '../styles/account.css';
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
