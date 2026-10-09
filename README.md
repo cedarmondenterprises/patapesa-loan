@@ -44,6 +44,9 @@ curl -fsS https://YOUR_ADMIN_DOMAIN/api/health
 
 Caddy obtains and renews the TLS certificate automatically after DNS and ports are correct.
 If your VM user is not a member of the Docker group, prefix every `docker compose` command with `sudo`.
+The public Caddy configuration is copied into the Caddy image with a readable mode. The root
+`.dockerignore` limits its build context to that configuration and its Dockerfile, so `.env` is not
+sent to the build. Keep the existing `caddy_data` volume when updating to preserve TLS state.
 
 ## First staff account
 
@@ -90,6 +93,11 @@ sudo docker compose up -d
 sudo docker compose ps
 curl -fsS https://YOUR_DOMAIN/api/health
 ```
+
+If a previous deployment used a bind-mounted `Caddyfile` and Caddy logs show `permission denied`,
+restore service with `sudo chmod 644 Caddyfile && sudo docker compose restart caddy`. After updating
+to the image-based configuration, `docker compose build --pull` and `docker compose up -d` replace
+the old container; future file modes in the checkout no longer affect Caddy's startup.
 
 Keep `KYC_ENCRYPTION_KEY` stable and backed up securely: changing or losing it makes new encrypted identity values unusable. Never commit `.env` or database dumps.
 

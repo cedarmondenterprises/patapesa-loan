@@ -1,0 +1,4 @@
+# The root build context is used only for Caddy. Never send application or secret files.
+*
+!Caddyfile
+!Caddy.Dockerfile

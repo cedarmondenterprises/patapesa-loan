@@ -35,6 +35,11 @@ jobs:
         run: |
           chmod 600 schema.sql
           docker build --tag patapesa-backend-permissions .
+      - name: Build Caddy image with restricted checkout permissions
+        run: |
+          chmod 600 ../Caddyfile
+          docker build --file ../Caddy.Dockerfile --tag patapesa-caddy-permissions ..
+          docker run --rm -e DOMAIN=example.com -e ADMIN_DOMAIN=admin.example.com patapesa-caddy-permissions caddy validate --config /etc/caddy/Caddyfile
 
   frontend:
     runs-on: ubuntu-latest
