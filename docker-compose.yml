@@ -107,13 +107,15 @@ services:
     logging: *logging
 
   caddy:
-    image: caddy:2.10-alpine
+    build:
+      context: .
+      dockerfile: Caddy.Dockerfile
+    image: patapesa-caddy:2.10
     environment:
       DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN in .env}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     networks: [edge]
