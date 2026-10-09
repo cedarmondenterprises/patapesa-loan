@@ -12,6 +12,7 @@ jest.mock('../src/core/db', () => ({
 
 import app from '../src/app';
 import { createToken } from '../src/core/auth';
+import { kenyaDate } from '../src/core/kenya-date';
 import { normalizeMetricsPath, renderMetrics } from '../src/core/metrics';
 
 describe('API security and authentication surface', () => {
@@ -593,7 +594,7 @@ describe('API security and authentication surface', () => {
         amount: '1000',
         method: 'MOBILE_MONEY',
         reference: 'qwe12345rt',
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate: kenyaDate(new Date(Date.now() - 24 * 60 * 60 * 1000)),
       });
 
     expect(response.status).toBe(201);
