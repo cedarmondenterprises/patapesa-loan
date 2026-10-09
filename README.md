@@ -17,9 +17,9 @@ The customer portal uses an original, mobile-first PataPesa interface. The homep
 
 The database and API have no public host ports. This avoids the former browser bug where visitors were sent to `localhost:5000` on their own device.
 
-## Azure VM deployment
+## AWS Ubuntu VM deployment
 
-Prerequisites: an Ubuntu Azure VM, Docker Engine with the Compose plugin, customer and admin hostnames whose A records point to the VM, and inbound NSG rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP. The examples use `loans.example.com` and `admin.loans.example.com`.
+Prerequisites: an Ubuntu EC2 instance, Docker Engine with the Compose plugin, customer and admin hostnames whose A records point to its public IP, and security-group rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP. An Elastic IP keeps the DNS target stable if the instance is stopped. The examples use `loans.example.com` and `admin.loans.example.com`.
 
 ```bash
 git clone https://github.com/cedarmondenterprises/patapesa-loan.git
@@ -77,14 +77,18 @@ repayments; connect an approved payment provider before handling real funds.
 
 ## Updating safely
 
-Back up first, then pull, rebuild, and verify health:
+On the AWS VM, back up the database first, then pull, rebuild, and verify health. Keep the dump outside the Git checkout and never commit it:
 
 ```bash
-docker compose exec -T postgres pg_dump -U patapesa -d patapesa_db -Fc > patapesa-$(date +%F).dump
+mkdir -p -m 700 "$HOME/patapesa-backups"
+backup_file="$HOME/patapesa-backups/patapesa-$(date +%F-%H%M).dump"
+sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_file"
+test -s "$backup_file"
 git pull --ff-only
-docker compose build --pull
-docker compose up -d
-docker compose ps
+sudo docker compose build --pull
+sudo docker compose up -d
+sudo docker compose ps
+curl -fsS https://YOUR_DOMAIN/api/health
 ```
 
 Keep `KYC_ENCRYPTION_KEY` stable and backed up securely: changing or losing it makes new encrypted identity values unusable. Never commit `.env` or database dumps.
@@ -157,7 +161,7 @@ sudo docker compose -f docker-compose.yml -f docker-compose.observability.yml up
 Access the dashboards through SSH tunnels from your computer:
 
 ```bash
-ssh -L 3100:127.0.0.1:3100 -L 3002:127.0.0.1:3002 azureuser@YOUR_VM_IP
+ssh -L 3100:127.0.0.1:3100 -L 3002:127.0.0.1:3002 ubuntu@YOUR_VM_IP
 ```
 
 Open `http://127.0.0.1:3100` for Grafana and `http://127.0.0.1:3002` for Uptime Kuma. In Uptime
