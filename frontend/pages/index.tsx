@@ -97,51 +97,48 @@ export default function Home() {
     >
       <section className="home-hero">
         <div className="hero-story">
-          <p className="eyebrow">Borrow with clarity</p>
+          <p className="eyebrow">Your borrowing, made clearer</p>
           <h1>
-            A loan is a decision.
+            Know your loan.
             <br />
-            <em>Make it an informed one.</em>
+            <em>Every step of the way.</em>
           </h1>
           <p className="hero-description">
-            Start with the numbers. Explore an amount, understand the full repayment, and decide
-            what works for you.
+            Understand the cost before you apply. Then see your application status, next steps and
+            repayment details in one place.
           </p>
-          <a className="button button-primary" href="#estimate">
-            Explore your estimate <span aria-hidden="true">↗</span>
-          </a>
-          <p className="hero-caption">
-            Already applied? <Link href="/dashboard">Go to your account →</Link>
-          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/dashboard">
+              Track my loan <span aria-hidden="true">→</span>
+            </Link>
+            <a className="button button-secondary" href="#estimate">
+              Get an estimate
+            </a>
+          </div>
+          <p className="hero-caption">Already have an account? Sign in to see your real progress.</p>
         </div>
-        <div className="hero-guide" aria-label="The borrowing journey">
-          <p className="eyebrow">Know what comes next</p>
-          <ol>
-            <li>
-              <span>01</span>
-              <div>
-                <strong>Understand the cost</strong>
-                <p>See interest, fees and total repayment together.</p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <strong>Apply on your terms</strong>
-                <p>Review your details before submitting.</p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <strong>Stay informed</strong>
-                <p>Follow your application and repayments in one account.</p>
-              </div>
-            </li>
-          </ol>
-          <Link href="/about">
-            How the application works <span aria-hidden="true">→</span>
-          </Link>
+        <div className="home-account-preview" aria-label="Preview of the customer account">
+          <div className="home-preview-topline">
+            <span className="home-preview-icon" aria-hidden="true">▤</span>
+            <span>Inside your account</span>
+            <span className="home-preview-chip">Preview</span>
+          </div>
+          <div className="home-preview-progress">
+            <p className="home-preview-kicker">Your application</p>
+            <h2>One clear view of what happens next.</h2>
+            <p>See the current status and whether there is anything you need to do.</p>
+            <ol aria-label="Application stages">
+              <li><span aria-hidden="true">1</span>Applied</li>
+              <li><span aria-hidden="true">2</span>Identity</li>
+              <li><span aria-hidden="true">3</span>Decision</li>
+              <li><span aria-hidden="true">4</span>Funds</li>
+            </ol>
+          </div>
+          <div className="home-preview-details">
+            <div><strong>Loan progress</strong><span>Understand each stage</span></div>
+            <div><strong>Repayments</strong><span>See what is due</span></div>
+          </div>
+          <p className="home-preview-disclaimer">Illustration only. Your actual status appears after sign in.</p>
         </div>
       </section>
       <section id="estimate" className="estimate-section" aria-labelledby="estimate-title">
