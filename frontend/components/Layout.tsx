@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { ReactNode, useState } from 'react';
 import { useRouter } from 'next/router';
 import Brand from './Brand';
+import AccountChrome from './AccountChrome';
 
 const SITE_URL = 'https://cedarmondtv.site';
 const PRIVATE_PATHS = new Set([
@@ -99,7 +100,7 @@ export default function Layout({
           />
         )}
       </Head>
-      <div className={`site-shell ${accountPage ? 'account-shell' : ''}`}>
+      {accountPage ? <AccountChrome>{children}</AccountChrome> : <div className="site-shell">
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
@@ -184,7 +185,7 @@ export default function Layout({
             </span>
           </div>
         </footer>
-      </div>
+      </div>}
     </>
   );
 }

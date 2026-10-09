@@ -133,47 +133,87 @@ export default function Dashboard() {
     nextInstallment = installments.find(
       (item) => Number(item.remaining) > 0 && !['PAID', 'WAIVED'].includes(item.status),
     ),
-    paid = payments
-      .filter((p) => p.status === 'COMPLETED')
-      .reduce((sum, p) => sum + Number(p.amount), 0);
+    featuredLoan = loans.find((loan) => Number(loan.outstanding) > 0) || loans[0],
+    featuredDue = installments.find(
+      (item) =>
+        item.loanNumber === featuredLoan?.loanNumber &&
+        Number(item.remaining) > 0 &&
+        !['PAID', 'WAIVED'].includes(item.status),
+    ),
+    pendingFeaturedPayment = payments.some(
+      (payment) =>
+        payment.loanId === featuredLoan?.id && ['PENDING', 'PROCESSING'].includes(payment.status),
+    ),
+    recentActivity = [
+      ...apps.slice(0, 3).map((app) => ({
+        key: app.id,
+        title: `Application ${app.status.replace(/_/g, ' ').toLowerCase()}`,
+        description: app.applicationNumber,
+        at: app.updatedAt || app.createdAt,
+        tone: app.status === 'REJECTED' ? 'negative' : 'neutral',
+      })),
+      ...payments.slice(0, 3).map((payment) => ({
+        key: payment.id,
+        title: `Payment ${payment.status.replace(/_/g, ' ').toLowerCase()}`,
+        description: `${money(payment.amount)} · ${payment.loanNumber}`,
+        at: payment.paymentDate,
+        tone: ['FAILED', 'REJECTED'].includes(payment.status)
+          ? 'negative'
+          : payment.status === 'COMPLETED'
+            ? 'complete'
+            : 'neutral',
+      })),
+    ]
+      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
+      .slice(0, 3),
+    nextStep = needsKyc && latest && ['SUBMITTED', 'UNDER_REVIEW'].includes(latest.status)
+      ? { title: 'Check your identity details', detail: kyc?.rejectionReason || 'Your identity details need attention before a decision.', href: '#identity-verification', action: 'Review identity details' }
+      : pendingFeaturedPayment
+        ? { title: 'Receipt awaiting verification', detail: 'We will update your balance after the submitted payment is confirmed.', href: '#repayments', action: 'View payment status' }
+      : nextInstallment
+        ? { title: 'Keep track of your next instalment', detail: `${money(nextInstallment.remaining)} due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}. After paying using your agreement, submit the receipt here.`, href: '#submit-repayment', action: 'Submit payment details' }
+        : latest?.status === 'REJECTED'
+          ? { title: 'Review the decision', detail: latest.rejectionReason || 'The decision and available next steps are shown in your application.', href: '#application-progress', action: 'View decision' }
+          : latest?.status === 'APPROVED'
+            ? { title: 'Wait for your transfer', detail: 'Your application was approved. Funds are recorded only after the transfer is made.', href: '#application-progress', action: 'View progress' }
+            : latest
+              ? { title: 'Follow your application', detail: 'We will show each review stage here as it happens.', href: '#application-progress', action: 'View progress' }
+              : { title: 'Explore your options', detail: 'Compare the total cost and repayment period before applying.', href: '/loans', action: 'See loan options' };
   if (loading)
     return (
       <Layout title="Dashboard | PataPesa">
-        <div className="space-y-4">
-          <div className="skeleton h-24" />
-          <div className="grid gap-4 md:grid-cols-3">
-            {[1, 2, 3].map((x) => (
-              <div key={x} className="skeleton h-32" />
-            ))}
+        <div className="account-loading" aria-label="Loading your account">
+          <div className="skeleton h-20" />
+          <div className="account-feature-grid">
+            <div className="skeleton h-80" /><div className="skeleton h-80" />
           </div>
-          <div className="skeleton h-72" />
         </div>
+      </Layout>
+    );
+  if (loadError)
+    return (
+      <Layout title="My account | PataPesa">
+        <section className="account-card account-load-error" role="alert">
+          <h1>We couldn’t load your account</h1>
+          <p>{loadError}</p>
+          <button className="button button-primary" onClick={() => void load()}>
+            Try again
+          </button>
+        </section>
       </Layout>
     );
   return (
     <Layout title="My account | PataPesa">
-      <header className="flex flex-col justify-between gap-6 border-b border-pata-900/15 pb-8 sm:flex-row sm:items-end">
+      <header className="account-page-heading">
         <div>
-          <p className="eyebrow">Customer account</p>
-          <h1 className="mt-2 text-4xl font-bold tracking-[-.035em] text-pata-950">
-            {user?.firstName}’s account
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            {user?.email} · {user?.phone}
+          <p className="account-greeting">
+            Good to see you{user?.firstName ? `, ${user.firstName}` : ''}
           </p>
+          <h1>Your loan, at a glance</h1>
+          <p>Track your application, manage repayments and find support in one place.</p>
         </div>
-        <div className="flex flex-wrap gap-3 self-start">
-          {latest && (
-            <a href="#application-progress" className="button button-primary button-small">
-              Track application
-            </a>
-          )}
-          <button onClick={() => void signOut()} className="button button-secondary button-small">
-            Sign out
-          </button>
-        </div>
+        <button onClick={() => void signOut()} className="account-signout">Sign out</button>
       </header>
-      <nav className="account-shortcuts" aria-label="Account sections">{latest && <a href="#application-progress">Application status</a>}{loans.length > 0 && <a href="#repayments">Repayments</a>}<a href="#identity-verification">Identity details</a><Link href="/contact">Get help</Link></nav>
       {message && (
         <p
           className={`notice mt-6 ${
@@ -183,65 +223,60 @@ export default function Dashboard() {
           {message}
         </p>
       )}
-      {loadError && (
-        <div
-          className="notice notice-error mt-6 flex items-center justify-between gap-4"
-          role="alert"
-        >
-          <span>{loadError}</span>
-          <button className="text-sm font-bold underline" onClick={() => void load()}>
-            Try again
-          </button>
-        </div>
-      )}
-      <section className="mt-8 grid border-y border-pata-900/15 md:grid-cols-3">
-        <Summary
-          label="Your next action"
-          value={
-            needsKyc
-              ? kyc?.status === 'REJECTED'
-                ? 'Correct identity details'
-                : 'Verify identity'
-              : nextInstallment
-                ? `Pay ${money(nextInstallment.remaining)}`
-                : latest
-                  ? latest.status.replace(/_/g, ' ').toLowerCase()
-                  : 'Choose a loan'
-          }
-          note={
-            needsKyc
-              ? kyc?.rejectionReason || 'Required before a loan can be approved'
-              : nextInstallment
-                ? `Due ${new Date(nextInstallment.dueDate).toLocaleDateString('en-KE')}`
-                : latest
-                  ? `Application ${latest.applicationNumber}`
-                  : 'Compare the full repayment first'
-          }
-        />
-        <Summary
-          label="Identity check"
-          value={kyc?.status.replace(/_/g, ' ').toLowerCase() || 'Not submitted'}
-          note={
-            kyc
-              ? `${kyc.idType.replace(/_/g, ' ')} ending ${kyc.idNumberLast4}`
-              : 'Required before loan approval'
-          }
-          border
-        />
-        <Summary
-          label="Total paid"
-          value={money(paid)}
-          note={`${payments.length} payment record${payments.length === 1 ? '' : 's'}`}
-          border
-        />
-      </section>
-      {latest && <ApplicationJourney application={latest} kyc={kyc} />}
+      <div className="account-feature-grid">
+        {latest ? <ApplicationJourney application={latest} kyc={kyc} /> : (
+          <section id="application-progress" className="account-progress-card account-card">
+            <div className="account-card-icon" aria-hidden="true">✦</div>
+            <p className="account-card-kicker">Your application</p>
+            <h2>No application yet</h2>
+            <p>Explore loan options and review the full repayment before you apply.</p>
+            <Link href="/loans" className="button button-primary">Explore loan options →</Link>
+          </section>
+        )}
+        <section id={loans.length ? undefined : 'repayments'} className="account-balance-card account-card" aria-labelledby="account-balance-title">
+          <div className="account-card-topline"><span className="account-card-icon" aria-hidden="true">▤</span><span className="account-card-tag">{featuredLoan ? featuredLoan.status.replace(/_/g, ' ').toLowerCase() : 'No active loan'}</span></div>
+          <h2 id="account-balance-title">{featuredLoan ? 'Your repayment' : 'Repayment overview'}</h2>
+          {featuredLoan ? (
+            <>
+              <p className="account-balance-label">Outstanding balance · {featuredLoan.loanNumber}</p>
+              <strong className="account-balance-amount">{money(featuredLoan.outstanding)}</strong>
+              <div className="account-next-due">
+                <span>{featuredDue ? 'Next instalment' : 'Repayment status'}</span>
+                <strong>{featuredDue ? `${money(featuredDue.remaining)} · ${new Date(featuredDue.dueDate).toLocaleDateString('en-KE')}` : Number(featuredLoan.outstanding) === 0 ? 'No outstanding balance' : 'See repayment schedule'}</strong>
+              </div>
+              {Number(featuredLoan.outstanding) > 0 && ['ACTIVE', 'DEFAULTED'].includes(featuredLoan.status) ? (
+                <a href={pendingFeaturedPayment ? '#repayments' : '#submit-repayment'} className="button button-primary account-balance-action">{pendingFeaturedPayment ? 'View payment status' : 'Submit payment details'} <span aria-hidden="true">→</span></a>
+              ) : <a href="#repayments" className="button button-secondary account-balance-action">View loan details →</a>}
+              <p className="account-balance-hint">{Number(featuredLoan.outstanding) === 0 ? 'This loan has no outstanding balance.' : pendingFeaturedPayment ? 'A submitted receipt is awaiting verification.' : 'Pay using the channel in your loan agreement, then submit the receipt here.'}</p>
+            </>
+          ) : (
+            <div className="account-no-balance"><strong>No payment due yet</strong><p>Your repayment details will appear here when a loan is disbursed.</p>{hasOpenApplication ? <a href="#application-progress">View application progress →</a> : <Link href="/loans">View loan options →</Link>}</div>
+          )}
+        </section>
+      </div>
+      <div className="account-insights-grid">
+        <section id="activity" className="account-card account-insight-card">
+          <div className="account-insight-heading"><h2>Recent activity</h2><a href="#application-history">Applications</a></div>
+          {recentActivity.length ? <ol className="account-activity-list">{recentActivity.map((item) => <li key={item.key}><span className={`account-activity-dot account-activity-${item.tone}`} aria-hidden="true">{item.tone === 'negative' ? '!' : item.tone === 'complete' ? '✓' : '•'}</span><div><strong>{item.title}</strong><small>{item.description} · {new Date(item.at).toLocaleDateString('en-KE')}</small></div></li>)}</ol> : <p className="account-empty-copy">Your activity will appear here after you apply.</p>}
+        </section>
+        <section className="account-card account-insight-card">
+          <div className="account-insight-heading"><h2>Next steps</h2></div>
+          <strong className="account-next-step-title">{nextStep.title}</strong>
+          <p className="account-next-step-copy">{nextStep.detail}</p>
+          <a href={nextStep.href} className="account-inline-link">{nextStep.action} →</a>
+        </section>
+        <section className="account-card account-insight-card">
+          <div className="account-insight-heading"><h2>Need help?</h2></div>
+          <p className="account-next-step-copy">Questions about your application or repayments? Have your application reference ready when you contact us.</p>
+          <Link href="/contact" className="account-help-link">Visit Help Centre ↗</Link>
+        </section>
+      </div>
       {loans.length > 0 && (
-        <section id="repayments" className="surface mt-10 p-6 sm:p-8">
+        <section id="repayments" className="surface account-detail-section mt-10 p-6 sm:p-8">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <p className="eyebrow">Repayment overview</p>
-              <h2 className="mt-2 text-2xl font-bold text-pata-950">Your loan balance</h2>
+              <p className="eyebrow">Repayment details</p>
+              <h2 className="mt-2 text-2xl font-bold text-pata-950">Your loans and payments</h2>
             </div>
             <p className="text-sm text-slate-500">Confirmed payments update these figures.</p>
           </div>
@@ -277,7 +312,7 @@ export default function Dashboard() {
                     href="#submit-repayment"
                     className="button button-primary button-small mt-5 w-full"
                   >
-                    Submit repayment
+                    Submit payment details
                   </a>
                 )}
               </article>
@@ -364,10 +399,10 @@ export default function Dashboard() {
         </section>
       )}
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.45fr_.75fr]">
-        <section className="surface p-6 sm:p-8">
+        <section id="application-history" className="surface account-detail-section p-6 sm:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="eyebrow">Your activity</p>
+              <p className="eyebrow">Your records</p>
               <h2 className="mt-2 text-2xl font-bold text-pata-950">Application history</h2>
             </div>
             {hasOpenApplication ? (
@@ -418,7 +453,7 @@ export default function Dashboard() {
           )}{' '}
         </section>
         <aside className="space-y-6">
-          <section id="identity-verification" className="surface scroll-mt-24 p-6">
+          <section id="identity-verification" className="surface account-detail-section scroll-mt-24 p-6">
             <p className="eyebrow">Next step</p>
             <h2 className="mt-2 text-xl font-bold text-pata-950">
               {needsKyc
@@ -473,7 +508,7 @@ export default function Dashboard() {
               </>
             )}
           </section>
-          <section className="border-l-2 border-copper bg-[#eee9df] p-6">
+          <section className="account-support-note p-6">
             <h3 className="font-bold text-pata-950">Need assistance?</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Use your application reference when contacting the support team.
@@ -485,29 +520,6 @@ export default function Dashboard() {
         </aside>
       </div>
     </Layout>
-  );
-}
-function Summary({
-  label,
-  value,
-  note,
-  border = false,
-}: {
-  label: string;
-  value: string;
-  note: string;
-  border?: boolean;
-}) {
-  return (
-    <div
-      className={`py-7 md:px-8 ${
-        border ? 'border-t border-pata-900/15 md:border-l md:border-t-0' : ''
-      }`}
-    >
-      <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
-      <strong className="mt-2 block text-2xl capitalize text-pata-950">{value}</strong>
-      <small className="mt-2 block text-slate-500">{note}</small>
-    </div>
   );
 }
 
@@ -724,213 +736,72 @@ function RepaymentForm({
 
 function ApplicationJourney({ application, kyc }: { application: Application; kyc: Kyc }) {
   const status = application.status;
-  const decisionReached = ['APPROVED', 'REJECTED', 'DISBURSED', 'COMPLETED'].includes(status);
+  const rejected = status === 'REJECTED';
   const fundsRecorded = ['DISBURSED', 'COMPLETED'].includes(status);
+  const approved = ['APPROVED', 'DISBURSED', 'COMPLETED'].includes(status);
   const identityApproved = kyc?.status === 'APPROVED';
   const identityNeedsAction = !kyc || ['REJECTED', 'EXPIRED'].includes(kyc.status);
-  const approved = ['APPROVED', 'DISBURSED', 'COMPLETED'].includes(status);
-  const underReview = status === 'UNDER_REVIEW';
-  const rejected = status === 'REJECTED';
+  const summary = rejected
+    ? { label: 'Decision recorded', title: 'Application not approved', detail: 'Read the reason below. Contact support if you need help understanding the decision.', tone: 'danger' }
+    : fundsRecorded
+      ? { label: 'Funds recorded', title: 'Funds sent', detail: 'Your loan and repayment details are shown on this page.', tone: 'success' }
+      : approved
+        ? { label: 'Approved', title: 'Your application is approved', detail: 'The transfer is being prepared. We will update this page when it is recorded.', tone: 'success' }
+        : identityNeedsAction
+          ? { label: 'Action needed', title: 'Identity details need attention', detail: kyc?.rejectionReason || 'Verify your identity to continue the review.', tone: 'danger' }
+          : status === 'UNDER_REVIEW'
+            ? { label: 'In progress', title: 'Loan in review', detail: 'We are reviewing your application. No action is needed right now.', tone: 'review' }
+            : identityApproved
+              ? { label: 'In progress', title: 'Waiting for review', detail: 'Your identity is verified. We will update this page when the review starts.', tone: 'review' }
+              : { label: 'In progress', title: 'Identity check in progress', detail: 'Your details are being checked before a decision is made.', tone: 'review' };
   const stages = [
+    { label: 'Applied', detail: new Date(application.createdAt).toLocaleDateString('en-KE'), state: 'complete' },
     {
-      label: 'Application received',
-      detail: `Submitted ${new Date(application.createdAt).toLocaleDateString('en-KE')}`,
-      state: 'complete',
+      label: 'Identity check',
+      detail: identityApproved ? 'Verified' : identityNeedsAction ? 'Needs attention' : 'In review',
+      state: identityApproved ? 'complete' : identityNeedsAction ? 'attention' : 'current',
     },
     {
-      label: identityNeedsAction ? 'Identity details need attention' : 'Identity verification',
-      detail: identityApproved
-        ? 'Your identity details have been verified'
-        : kyc?.status === 'PENDING'
-          ? 'Your identity details are being checked'
-          : identityNeedsAction
-            ? kyc?.rejectionReason || 'Please correct and resubmit your identity details'
-            : 'Submit your identity details to continue',
-      state: identityNeedsAction ? 'attention' : identityApproved ? 'complete' : 'current',
+      label: 'Decision',
+      detail: rejected ? 'Not approved' : approved ? 'Approved' : identityApproved ? 'In review' : 'Coming next',
+      state: rejected ? 'attention' : approved ? 'complete' : identityApproved ? 'current' : 'upcoming',
     },
     {
-      label: underReview ? 'Application review in progress' : 'Application review',
-      detail: decisionReached
-        ? 'Identity, affordability and application details reviewed'
-        : underReview
-          ? 'Our team is assessing your application'
-          : identityApproved
-            ? 'Your application is queued for review'
-            : 'This starts after identity verification',
-      state: decisionReached ? 'complete' : identityApproved ? 'current' : 'upcoming',
-    },
-    {
-      label: rejected ? 'Application not approved' : approved ? 'Application approved' : 'Decision',
-      detail: decisionReached
-        ? `Recorded ${new Date(application.reviewedAt || application.updatedAt).toLocaleDateString(
-            'en-KE',
-          )}`
-        : 'We will show the decision here after review',
-      state: rejected ? 'attention' : approved ? 'complete' : 'upcoming',
-    },
-    {
-      label: fundsRecorded ? 'Funds sent' : 'Disbursement',
-      detail: rejected
-        ? 'This step is not available for this application'
-        : fundsRecorded
-          ? 'The transfer has been recorded'
-          : approved
-            ? 'The approved transfer is being prepared'
-            : 'This starts only after approval',
-      state: fundsRecorded ? 'complete' : approved ? 'current' : 'upcoming',
+      label: 'Funds sent',
+      detail: fundsRecorded ? 'Recorded' : rejected ? 'Not applicable' : approved ? 'Transfer pending' : 'Coming next',
+      state: fundsRecorded ? 'complete' : rejected ? 'skipped' : approved ? 'current' : 'upcoming',
     },
   ];
-  const currentIndex = fundsRecorded || approved ? 4 : rejected ? 3 : identityApproved ? 2 : 1;
-  const progress = fundsRecorded
-    ? 100
-    : approved || rejected
-      ? 80
-      : Math.round(((currentIndex + 1) / stages.length) * 100);
-  const summary = rejected
-    ? {
-        eyebrow: 'Decision recorded',
-        title: 'Your application was not approved',
-        copy: 'Read the reason below. Contact support if you need an explanation.',
-        action: 'Review the decision reason',
-        tone: 'danger',
-      }
-    : fundsRecorded
-      ? {
-          eyebrow: 'Disbursement recorded',
-          title: 'Your funds have been sent',
-          copy: 'Your repayment information will appear when it is recorded.',
-          action: 'No action is needed right now',
-          tone: 'success',
-        }
-      : approved
-        ? {
-            eyebrow: 'Decision recorded',
-            title: 'Your application is approved',
-            copy: 'The transfer is being prepared. We will update this page when it is recorded.',
-            action: 'No action is needed right now',
-            tone: 'success',
-          }
-        : underReview
-          ? {
-              eyebrow: 'Review in progress',
-              title: 'We are reviewing your application',
-              copy: 'Our team is checking your identity, affordability and application details.',
-              action: 'No action is needed right now',
-              tone: 'review',
-            }
-          : identityNeedsAction
-            ? {
-                eyebrow: 'Action required',
-                title: 'Update your identity details',
-                copy: kyc?.rejectionReason || 'Identity verification is required before review.',
-                action: 'Go to identity verification',
-                tone: 'danger',
-              }
-            : identityApproved
-              ? {
-                  eyebrow: 'Waiting for review',
-                  title: 'Your application is in the review queue',
-                  copy: 'Your identity is verified. We will update this page when review starts.',
-                  action: 'No action is needed right now',
-                  tone: 'review',
-                }
-              : {
-                  eyebrow: 'Identity check',
-                  title: 'We are checking your identity details',
-                  copy: 'Your application enters the review queue after this check is complete.',
-                  action: 'No action is needed right now',
-                  tone: 'review',
-                };
   return (
-    <section
-      id="application-progress"
-      className="application-tracker surface mt-10 scroll-mt-24"
-      aria-labelledby="application-progress-title"
-    >
-      <div className="application-tracker-header">
-        <div>
-          <p className="eyebrow">Application progress</p>
-          <h2 id="application-progress-title">
-            {application.product} · {money(application.amount)}
-          </h2>
-          <p className="application-reference">Reference {application.applicationNumber}</p>
-        </div>
-        <StatusBadge status={status} />
+    <section id="application-progress" className={`account-progress-card account-card account-progress-${summary.tone}`} aria-labelledby="application-progress-title">
+      <div className="account-progress-topline">
+        <span className="account-card-icon" aria-hidden="true">▤</span>
+        <span className="account-card-tag">{summary.label}</span>
       </div>
-
-      <div className={`application-current application-current-${summary.tone}`}>
-        <div className="application-current-copy">
-          <p>{summary.eyebrow}</p>
-          <h3>{summary.title}</h3>
-          <span>{summary.copy}</span>
-        </div>
-        <div className="application-next-action">
-          <small>What you need to do</small>
-          {!decisionReached && identityNeedsAction ? (
-            <a href="#identity-verification">{summary.action} ↓</a>
-          ) : (
-            <strong>{summary.action}</strong>
-          )}
-        </div>
-      </div>
-
-      <div className="application-progress-meter">
-        <div className="application-progress-label">
-          <span>
-            Step {currentIndex + 1} of {stages.length}
-          </span>
-          <span>{summary.eyebrow}</span>
-        </div>
-        <div
-          className="application-progress-track"
-          role="progressbar"
-          aria-label="Application progress"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progress}
-        >
-          <span style={{ width: `${progress}%` }} />
-        </div>
-      </div>
-
-      <ol className="application-timeline" aria-label="Application stages">
-        {stages.map((stage, index) => (
-          <li
-            key={stage.label}
-            aria-current={stage.state === 'current' ? 'step' : undefined}
-            className={`application-stage application-stage-${stage.state}`}
-          >
-            <span className="application-stage-marker" aria-hidden="true">
-              {stage.state === 'complete' ? '✓' : stage.state === 'attention' ? '!' : index + 1}
-            </span>
-            <div>
-              <span className="application-stage-state">
-                {stage.state === 'complete'
-                  ? 'Complete'
-                  : stage.state === 'current'
-                    ? 'In progress'
-                    : stage.state === 'attention'
-                      ? 'Action needed'
-                      : 'Coming next'}
-              </span>
-              <strong>{stage.label}</strong>
-              <small>{stage.detail}</small>
-            </div>
+      <p className="account-card-kicker">Application progress · {application.product}</p>
+      <h2 id="application-progress-title">{summary.title}</h2>
+      <p className="account-progress-intro">{summary.detail}</p>
+      <p className="account-progress-meta">{money(application.amount)} · Reference {application.applicationNumber}</p>
+      <ol className="account-progress-steps" aria-label="Loan application stages">
+        {stages.map((stage) => (
+          <li key={stage.label} className={`account-progress-step account-progress-step-${stage.state}`} aria-current={stage.state === 'current' ? 'step' : undefined}>
+            <span className="account-progress-marker" aria-hidden="true">{stage.state === 'complete' ? '✓' : stage.state === 'attention' ? '!' : ''}</span>
+            <strong>{stage.label}</strong>
+            <small>{stage.detail}</small>
           </li>
         ))}
       </ol>
-
       {application.rejectionReason && (
-        <div className="application-decision" role="alert">
-          <span>Reason provided</span>
-          <strong>{application.rejectionReason}</strong>
+        <div className="account-decision-reason" role="alert">
+          <strong>Why it was not approved</strong>
+          <p>{application.rejectionReason}</p>
           <Link href="/contact">Ask support about this decision →</Link>
         </div>
       )}
-      <p className="application-updated">
-        Last updated{' '}
-        {new Date(application.updatedAt || application.createdAt).toLocaleString('en-KE')}
-      </p>
+      {identityNeedsAction && !rejected && !approved && (
+        <a href="#identity-verification" className="account-inline-link">Review identity details →</a>
+      )}
+      <p className="account-progress-updated">Last updated {new Date(application.updatedAt || application.createdAt).toLocaleString('en-KE')}</p>
     </section>
   );
 }
