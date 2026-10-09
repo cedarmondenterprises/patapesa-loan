@@ -1,7 +1,10 @@
 import InfoPage from '../components/InfoPage';
 export default function Privacy() {
   return (
-    <InfoPage title="Privacy notice">
+    <InfoPage
+      title="Privacy notice"
+      description="Read how PataPesa handles registration, identity, contact and loan application information, including access, retention and customer data requests."
+    >
       <p>
         PataPesa collects the identity, contact, residence, employment, education, income-range and
         household information you provide to create and operate your account, assess eligibility and

@@ -1,15 +1,22 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Brand from '../components/Brand';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 
 export default function Login() {
   const router = useRouter(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [show, setShow] = useState(false);
+    [show, setShow] = useState(false),
+    [retryAfter, setRetryAfter] = useState(0);
+  useEffect(() => {
+    if (!retryAfter) return;
+    const timer = window.setTimeout(() => setRetryAfter((n) => Math.max(0, n - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [retryAfter]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (busy || retryAfter > 0) return;
     setBusy(true);
     setError('');
     const f = new FormData(e.currentTarget);
@@ -25,7 +32,9 @@ export default function Login() {
       await api('/admin/me');
       await router.push('/dashboard');
     } catch (err) {
-      await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
+      if (err instanceof ApiError && err.status === 429) setRetryAfter(err.retryAfterSeconds);
+      if (err instanceof ApiError && err.status === 403)
+        await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
       setBusy(false);
@@ -74,8 +83,12 @@ export default function Login() {
               </button>
             </div>
           </label>
-          <button className="primary wide" disabled={busy}>
-            {busy ? 'Verifying access…' : 'Sign in securely'}
+          <button className="primary wide" disabled={busy || retryAfter > 0}>
+            {retryAfter > 0
+              ? `Try again in ${retryAfter}s`
+              : busy
+              ? 'Verifying access…'
+              : 'Sign in securely'}
           </button>
           <p className="security-note">
             <span>●</span> Privileged changes are written to the audit log.

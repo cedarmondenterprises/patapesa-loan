@@ -30,12 +30,13 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
-    "nodemailer": "^10.0.8",
+    "nodemailer": "^10.0.16",
     "pdfkit": "^0.20.2",
     "pg": "^8.16.3"
   },
   "overrides": {
-    "lodash": "^4.18.1"
+    "lodash": "^4.18.1",
+    "proxy-addr": "^2.0.8"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

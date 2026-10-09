@@ -1,22 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Layout from '../components/Layout';
-import AdSlot from '../components/AdSlot';
 import { api } from '../lib/api';
 
-type QuoteProduct = {
+type Product = {
   id: string;
-  name: string;
-  use: string;
-  min: number;
-  max: number;
-  minTerm: number;
-  maxTerm: number;
-  rate: number;
-  fee: number;
-};
-
-type ApiProduct = {
   code: string;
   name: string;
   description: string;
@@ -27,278 +15,349 @@ type ApiProduct = {
   interestRate: string;
   processingFee: string;
 };
-
-const productDefaults: QuoteProduct[] = [
-  {
-    id: 'emergency',
-    name: 'Emergency',
-    use: 'Unexpected essential expenses',
-    min: 1000,
-    max: 50000,
-    minTerm: 1,
-    maxTerm: 6,
-    rate: 18,
-    fee: 3,
-  },
-  {
-    id: 'personal',
-    name: 'Personal',
-    use: 'Planned household or personal costs',
-    min: 10000,
-    max: 500000,
-    minTerm: 3,
-    maxTerm: 24,
-    rate: 15,
-    fee: 2.5,
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    use: 'Stock, tools or working capital',
-    min: 50000,
-    max: 1000000,
-    minTerm: 6,
-    maxTerm: 36,
-    rate: 12,
-    fee: 2,
-  },
-];
-
-const money = (value: number) => `KES ${Math.round(value).toLocaleString('en-KE')}`;
-
+const money = (value: number) =>
+  `KES ${value.toLocaleString('en-KE', { maximumFractionDigits: 2 })}`;
 export default function Home() {
-  const [products, setProducts] = useState(productDefaults);
-  const [productId, setProductId] = useState('personal');
-  const product = products.find((item) => item.id === productId) || products[1];
+  const [products, setProducts] = useState<Product[]>([]);
+  const [selectedId, setSelectedId] = useState('');
   const [amount, setAmount] = useState(50000);
+  const [amountText, setAmountText] = useState('50000');
   const [months, setMonths] = useState(12);
-
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [retry, setRetry] = useState(0);
+  const product = products.find((p) => p.id === selectedId);
   useEffect(() => {
-    api<{ data: ApiProduct[] }>('/products')
+    let active = true;
+    api<{ data: Product[] }>('/products')
       .then(({ data }) => {
-        if (!data.length) return;
-        setProducts(
-          data.map((item) => ({
-            id:
-              item.code === 'QUICK_CASH'
-                ? 'emergency'
-                : item.code === 'PERSONAL'
-                  ? 'personal'
-                  : item.code === 'BUSINESS'
-                    ? 'business'
-                    : item.code.toLowerCase(),
-            name: item.name.replace(/ loan$/i, ''),
-            use: item.description,
-            min: Number(item.minAmount),
-            max: Number(item.maxAmount),
-            minTerm: item.minTerm,
-            maxTerm: item.maxTerm,
-            rate: Number(item.interestRate),
-            fee: Number(item.processingFee || 0),
-          })),
+        if (!active) return;
+        const available = data.filter(
+          (p) =>
+            Number(p.minAmount) > 0 &&
+            Number(p.maxAmount) >= Number(p.minAmount) &&
+            p.minTerm > 0 &&
+            p.maxTerm >= p.minTerm &&
+            Number.isFinite(Number(p.interestRate)) &&
+            Number.isFinite(Number(p.processingFee)),
         );
+        if (!available.length) {
+          setState('error');
+          return;
+        }
+        const first = available.find((p) => p.code === 'PERSONAL') || available[0];
+        setProducts(available);
+        setSelectedId(first.id);
+        const initialAmount = Math.max(
+          Number(first.minAmount),
+          Math.min(50000, Number(first.maxAmount)),
+        );
+        setAmount(initialAmount);
+        setAmountText(String(initialAmount));
+        setMonths(Math.max(first.minTerm, Math.min(12, first.maxTerm)));
+        setState('ready');
       })
-      .catch(() => undefined);
-  }, []);
-
-  function chooseProduct(id: string) {
-    const next = products.find((item) => item.id === id) || products[1];
-    setProductId(id);
-    setAmount(Math.max(next.min, Math.min(amount, next.max)));
+      .catch(() => {
+        if (active) setState('error');
+      });
+    return () => {
+      active = false;
+    };
+  }, [retry]);
+  const quote = useMemo(() => {
+    if (!product) return null;
+    const interest = (((amount * Number(product.interestRate)) / 100) * months) / 12;
+    const fee = (amount * Number(product.processingFee)) / 100;
+    return {
+      interest,
+      fee,
+      total: amount + interest + fee,
+      monthly: (amount + interest + fee) / months,
+    };
+  }, [amount, months, product]);
+  function choose(id: string) {
+    const next = products.find((p) => p.id === id);
+    if (!next) return;
+    setSelectedId(id);
+    const nextAmount = Math.max(Number(next.minAmount), Math.min(amount, Number(next.maxAmount)));
+    setAmount(nextAmount);
+    setAmountText(String(nextAmount));
     setMonths(Math.max(next.minTerm, Math.min(months, next.maxTerm)));
   }
-
-  const quote = useMemo(() => {
-    const interest = amount * (product.rate / 100) * (months / 12);
-    const fee = amount * (product.fee / 100);
-    const total = amount + interest + fee;
-    return { interest, fee, total, monthly: total / months };
-  }, [amount, months, product]);
-
+  const amountValid = Boolean(
+    product &&
+      amountText !== '' &&
+      Number(amountText) >= Number(product.minAmount) &&
+      Number(amountText) <= Number(product.maxAmount) &&
+      Number.isInteger(Number(amountText)),
+  );
   return (
     <Layout
-      title="Mobile Loans in Kenya | PataPesa"
-      description="Compare mobile loans in Kenya, calculate estimated interest and fees, and apply online through PataPesa."
+      title="PataPesa | Understand your loan before you apply"
+      description="Explore loan options in Kenya. See estimated repayments, interest and fees, then review your application with PataPesa."
     >
-      <section className="service-intro">
-        <div>
-          <span className="page-kicker">PataPesa loans</span>
-          <h1>Mobile loans in Kenya, with every cost shown first.</h1>
-        </div>
-        <p>
-          Set an amount and repayment period. The estimate updates immediately and shows each cost
-          separately.
-        </p>
-      </section>
-
-      <section className="loan-workspace" aria-labelledby="calculator-title">
-        <div className="workspace-main">
-          <div className="workspace-heading">
-            <div>
-              <span className="section-number">01</span>
-              <h2 id="calculator-title">Build an estimate</h2>
-            </div>
-            <Link href="/login">Existing customer sign in</Link>
-          </div>
-
-          <fieldset className="product-choice">
-            <legend>Loan type</legend>
-            <div>
-              {products.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-pressed={item.id === productId}
-                  onClick={() => chooseProduct(item.id)}
-                >
-                  <strong>{item.name}</strong>
-                  <small>{item.use}</small>
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="calculator-fields">
-            <label className="calculator-field">
-              <span>
-                <b>Loan amount</b>
-                <output>{money(amount)}</output>
-              </span>
-              <input
-                aria-label="Loan amount"
-                type="range"
-                min={product.min}
-                max={product.max}
-                step={product.id === 'emergency' ? 1000 : 5000}
-                value={amount}
-                onChange={(event) => setAmount(Number(event.target.value))}
-              />
-              <small>
-                <span>{money(product.min)}</span>
-                <span>{money(product.max)}</span>
-              </small>
-            </label>
-            <label className="calculator-field">
-              <span>
-                <b>Repayment period</b>
-                <output>
-                  {months} month{months === 1 ? '' : 's'}
-                </output>
-              </span>
-              <input
-                aria-label="Repayment period"
-                type="range"
-                min={product.minTerm}
-                max={product.maxTerm}
-                value={months}
-                onChange={(event) => setMonths(Number(event.target.value))}
-              />
-              <small>
-                <span>
-                  {product.minTerm} month{product.minTerm === 1 ? '' : 's'}
-                </span>
-                <span>{product.maxTerm} months</span>
-              </small>
-            </label>
-          </div>
-        </div>
-
-        <aside className="loan-receipt" aria-live="polite">
-          <div className="receipt-heading">
-            <span>Estimate</span>
-            <small>{product.name} loan</small>
-          </div>
-          <div className="receipt-primary">
-            <small>Monthly repayment</small>
-            <strong>{money(quote.monthly)}</strong>
-            <span>
-              for {months} month{months === 1 ? '' : 's'}
-            </span>
-          </div>
-          <dl>
-            <div>
-              <dt>Amount borrowed</dt>
-              <dd>{money(amount)}</dd>
-            </div>
-            <div>
-              <dt>Interest ({product.rate}% p.a.)</dt>
-              <dd>{money(quote.interest)}</dd>
-            </div>
-            <div>
-              <dt>Processing fee ({product.fee}%)</dt>
-              <dd>{money(quote.fee)}</dd>
-            </div>
-            <div className="receipt-total">
-              <dt>Total repayment</dt>
-              <dd>{money(quote.total)}</dd>
-            </div>
-          </dl>
-          <Link href="/register" className="button button-primary receipt-action">
-            Start application
-          </Link>
-          <p>
-            This is an estimate, not an approval. Your final offer may change after identity and
-            affordability checks.
+      <section className="home-hero">
+        <div className="hero-story">
+          <p className="eyebrow">Borrow with clarity</p>
+          <h1>
+            A loan is a decision.
+            <br />
+            <em>Make it an informed one.</em>
+          </h1>
+          <p className="hero-description">
+            Start with the numbers. Explore an amount, understand the full repayment, and decide
+            what works for you.
           </p>
-        </aside>
+          <a className="button button-primary" href="#estimate">
+            Explore your estimate <span aria-hidden="true">↗</span>
+          </a>
+          <p className="hero-caption">
+            Already applied? <Link href="/dashboard">Go to your account →</Link>
+          </p>
+        </div>
+        <div className="hero-guide" aria-label="The borrowing journey">
+          <p className="eyebrow">Know what comes next</p>
+          <ol>
+            <li>
+              <span>01</span>
+              <div>
+                <strong>Understand the cost</strong>
+                <p>See interest, fees and total repayment together.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <strong>Apply on your terms</strong>
+                <p>Review your details before submitting.</p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <strong>Stay informed</strong>
+                <p>Follow your application and repayments in one account.</p>
+              </div>
+            </li>
+          </ol>
+          <Link href="/about">
+            How the application works <span aria-hidden="true">→</span>
+          </Link>
+        </div>
       </section>
-
-      <section className="application-facts">
-        <div className="facts-heading">
-          <span className="section-number">02</span>
-          <h2>Before you start</h2>
+      <section id="estimate" className="estimate-section" aria-labelledby="estimate-title">
+        <div className="section-heading-row">
+          <div>
+            <p className="eyebrow">Plan before you commit</p>
+            <h2 id="estimate-title">What would your loan cost?</h2>
+          </div>
+          <p>
+            Change the amount or term to compare.
+            <br />
+            This is an estimate, not a loan offer.
+          </p>
         </div>
-        <div className="facts-list">
-          <div>
-            <strong>Age</strong>
-            <span>You must be 18 or older. Your date of birth is checked during registration.</span>
+        {state === 'loading' && (
+          <div className="estimate-empty" role="status">
+            Loading current loan products and rates…
           </div>
-          <div>
-            <strong>Contact</strong>
-            <span>Use a Kenyan mobile number and an email address you can access.</span>
+        )}
+        {state === 'error' && (
+          <div className="estimate-empty" role="alert">
+            <h3>We can’t load current rates.</h3>
+            <p>We’ll show an estimate when current products are available.</p>
+            <button
+              className="button button-secondary"
+              onClick={() => {
+                setState('loading');
+                setRetry((n) => n + 1);
+              }}
+            >
+              Try again
+            </button>
           </div>
-          <div>
-            <strong>Affordability</strong>
-            <span>Have your income, employment and existing monthly commitments ready.</span>
+        )}
+        {state === 'ready' && product && quote && (
+          <div className="estimate-layout">
+            <div className="estimate-controls">
+              <fieldset className="loan-type-options">
+                <legend>1. Choose your loan</legend>
+                <div>
+                  {products.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-pressed={selectedId === p.id}
+                      onClick={() => choose(p.id)}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="estimate-control">
+                <label htmlFor="estimate-amount">2. How much do you need?</label>
+                <div className="amount-input">
+                  <span>KES</span>
+                  <input
+                    id="estimate-amount"
+                    inputMode="numeric"
+                    type="number"
+                    min={product.minAmount}
+                    max={product.maxAmount}
+                    step="1"
+                    value={amountText}
+                    aria-invalid={!amountValid}
+                    aria-describedby="amount-range"
+                    onChange={(e) => {
+                      setAmountText(e.target.value);
+                      const n = Number(e.target.value);
+                      if (
+                        e.target.value !== '' &&
+                        Number.isInteger(n) &&
+                        n >= Number(product.minAmount) &&
+                        n <= Number(product.maxAmount)
+                      )
+                        setAmount(n);
+                    }}
+                  />
+                </div>
+                <input
+                  type="range"
+                  aria-label="Adjust loan amount"
+                  min={product.minAmount}
+                  max={product.maxAmount}
+                  step="1"
+                  value={amount}
+                  onChange={(e) => {
+                    setAmount(Number(e.target.value));
+                    setAmountText(e.target.value);
+                  }}
+                />
+                <div id="amount-range" className="range-labels">
+                  <span>{money(Number(product.minAmount))}</span>
+                  <span>{money(Number(product.maxAmount))}</span>
+                </div>
+              </div>
+              <div className="estimate-control">
+                <label htmlFor="estimate-term">3. Choose a repayment period</label>
+                <select
+                  id="estimate-term"
+                  value={months}
+                  onChange={(e) => setMonths(Number(e.target.value))}
+                >
+                  {Array.from(
+                    { length: product.maxTerm - product.minTerm + 1 },
+                    (_, i) => i + product.minTerm,
+                  ).map((n) => (
+                    <option key={n} value={n}>
+                      {n} {n === 1 ? 'month' : 'months'}
+                    </option>
+                  ))}
+                </select>
+                <p className="field-explanation">
+                  A longer term lowers the monthly estimate, but increases total interest.
+                </p>
+              </div>
+            </div>
+            <aside className="estimate-result" aria-label="Loan cost estimate">
+              <p className="estimate-tag">Your estimate · {product.name}</p>
+              <div className="estimate-monthly" aria-live="polite" aria-atomic="true">
+                <span>Estimated monthly repayment</span>
+                <strong>{money(quote.monthly)}</strong>
+                <small>Over {months} months</small>
+              </div>
+              <dl className="cost-breakdown">
+                <div>
+                  <dt>Amount borrowed</dt>
+                  <dd>{money(amount)}</dd>
+                </div>
+                <div>
+                  <dt>
+                    Interest <small>({product.interestRate}% p.a., flat)</small>
+                  </dt>
+                  <dd>{money(quote.interest)}</dd>
+                </div>
+                <div>
+                  <dt>
+                    Processing fee <small>({product.processingFee}%)</small>
+                  </dt>
+                  <dd>{money(quote.fee)}</dd>
+                </div>
+                <div className="cost-total">
+                  <dt>Total to repay</dt>
+                  <dd>{money(quote.total)}</dd>
+                </div>
+              </dl>
+              {amountValid ? (
+                <Link
+                  className="button button-primary"
+                  href={{
+                    pathname: '/loans',
+                    query: { product: product.id, amount, term: months },
+                  }}
+                >
+                  Continue with this estimate <span aria-hidden="true">→</span>
+                </Link>
+              ) : (
+                <>
+                  <p role="alert" className="notice notice-error">
+                    Enter a whole amount within the limits shown.
+                  </p>
+                  <button disabled className="button button-primary">
+                    Continue with this estimate
+                  </button>
+                </>
+              )}
+              <p className="estimate-note">
+                No application is submitted at this stage. Final terms depend on identity,
+                eligibility and affordability review. The annual flat rate is not an APR.
+              </p>
+            </aside>
           </div>
-          <div>
-            <strong>Identity</strong>
-            <span>You will be asked for accurate personal and identification details.</span>
-          </div>
-        </div>
+        )}
       </section>
-
-      <section className="plain-process">
+      <section className="preparation-section">
         <div>
-          <span className="section-number">03</span>
-          <h2>What happens next</h2>
+          <p className="eyebrow">Before you apply</p>
+          <h2>
+            A little preparation.
+            <br />A clearer application.
+          </h2>
+          <p>Have these details ready. You can check and edit your answers before submitting.</p>
+          <Link className="text-link" href="/register">
+            Create your account →
+          </Link>
         </div>
-        <ol>
-          <li>
-            <b>Register</b>
-            <span>Complete your personal, work and income profile.</span>
-          </li>
-          <li>
-            <b>Apply</b>
-            <span>Choose a loan and submit the required information.</span>
-          </li>
-          <li>
-            <b>Track</b>
-            <span>See the review status and decision in your account.</span>
-          </li>
-        </ol>
+        <dl className="preparation-list">
+          <div>
+            <dt>Identity</dt>
+            <dd>
+              Your legal name, date of birth and Kenyan National ID details. Registration is for
+              adults aged 18 and over.
+            </dd>
+          </div>
+          <div>
+            <dt>Contact details</dt>
+            <dd>A Kenyan mobile number and an email address you can access.</dd>
+          </div>
+          <div>
+            <dt>Income and commitments</dt>
+            <dd>Your work details, regular income and existing monthly loan payments.</dd>
+          </div>
+        </dl>
       </section>
-
-      <AdSlot slot="HOME_BELOW_PLANNER" />
-
-      <section className="service-help">
+      <section className="home-support">
         <div>
-          <strong>Need help before applying?</strong>
-          <span>Read the common questions or contact the support team.</span>
+          <p className="eyebrow">We’re here to help</p>
+          <h2>Questions before you decide?</h2>
         </div>
         <div>
-          <Link href="/faq">Help centre</Link>
-          <Link href="/contact">Contact support</Link>
+          <p>
+            Find out how applications work, how to follow a decision, or how to get help with
+            repayments.
+          </p>
+          <Link href="/faq">Visit the help centre →</Link>
+          <Link href="/contact">Contact support →</Link>
         </div>
       </section>
     </Layout>

@@ -3,12 +3,24 @@ import { appendFile } from 'node:fs/promises';
 const origin = process.env.SEO_ORIGIN || 'https://cedarmondtv.site';
 const key = 'd94c7f5362114eb7a95f35e727a4c9d8';
 const keyLocation = `${origin}/${key}.txt`;
+const paths = (process.env.INDEXNOW_PATHS || '')
+  .split(',')
+  .map((path) => path.trim())
+  .filter(Boolean);
+if (!paths.length) throw new Error('Set INDEXNOW_PATHS to public paths that have changed in production.');
 const sitemapResponse = await fetch(`${origin}/sitemap.xml`);
 if (!sitemapResponse.ok) throw new Error(`Could not read production sitemap: HTTP ${sitemapResponse.status}`);
 
 const sitemap = await sitemapResponse.text();
-const urlList = [...sitemap.matchAll(/<loc>(https:\/\/[^<]+)<\/loc>/g)].map((match) => match[1]);
-if (!urlList.length) throw new Error('The production sitemap contains no URLs.');
+const publicUrls = new Set([...sitemap.matchAll(/<loc>(https:\/\/[^<]+)<\/loc>/g)].map((match) => match[1]));
+const urlList = [...new Set(paths.map((path) => {
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('?') || path.includes('#')) {
+    throw new Error(`Expected a public path starting with /: ${path}`);
+  }
+  const url = new URL(path, origin).href;
+  if (!publicUrls.has(url)) throw new Error(`${path} is not in the production sitemap.`);
+  return url;
+}))];
 
 const response = await fetch('https://api.indexnow.org/indexnow', {
   method: 'POST',

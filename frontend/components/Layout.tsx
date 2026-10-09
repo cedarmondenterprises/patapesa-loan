@@ -28,13 +28,18 @@ export default function Layout({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const nav = [
-    ['/', 'Home'],
-    ['/loans', 'Apply'],
-    ['/dashboard#application-progress', 'Track application'],
-    ['/about', 'How it works'],
-    ['/faq', 'Help'],
-  ];
+  const accountPage = router.pathname === '/dashboard';
+  const nav = accountPage
+    ? [
+        ['/dashboard', 'My account'],
+        ['/loans', 'Loan options'],
+        ['/contact', 'Support'],
+      ]
+    : [
+        ['/loans', 'Loan options'],
+        ['/about', 'How it works'],
+        ['/faq', 'Help centre'],
+      ];
   const path = canonicalPath || router.pathname;
   const canonicalUrl = `${SITE_URL}${path === '/' ? '' : path}`;
   const preventIndexing = noIndex || PRIVATE_PATHS.has(router.pathname);
@@ -66,7 +71,7 @@ export default function Layout({
         <title>{title}</title>
         <meta name="description" content={description} />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#0B1F4B" />
+        <meta name="theme-color" content="#16332f" />
         <meta
           name="robots"
           content={preventIndexing ? 'noindex, nofollow' : 'index, follow, max-image-preview:large'}
@@ -78,13 +83,14 @@ export default function Layout({
         <meta property="og:title" content={title} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonicalUrl} />
-        <meta property="og:image" content={`${SITE_URL}/social-preview.svg`} />
+        <meta property="og:image" content={`${SITE_URL}/social-preview.png`} />
+        <meta property="og:image:type" content="image/png" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={title} />
         <meta name="twitter:description" content={description} />
-        <meta name="twitter:image" content={`${SITE_URL}/social-preview.svg`} />
+        <meta name="twitter:image" content={`${SITE_URL}/social-preview.png`} />
         <link rel="icon" href="/favicon.svg" />
         {!preventIndexing && (
           <script
@@ -93,28 +99,39 @@ export default function Layout({
           />
         )}
       </Head>
-      <div className="site-shell">
+      <div className={`site-shell ${accountPage ? 'account-shell' : ''}`}>
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
         <header className="site-header">
           <nav className="site-nav" aria-label="Main navigation">
             <Brand />
             <div className="desktop-nav">
               {nav.map(([href, label]) => (
-                <Link key={href} href={href} className={router.pathname === href ? 'active' : ''}>
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={router.asPath === href ? 'page' : undefined}
+                  className={router.asPath === href ? 'active' : ''}
+                >
                   {label}
                 </Link>
               ))}
             </div>
             <div className="nav-actions">
-              <Link href="/login" className="text-link">
-                Sign in
+              <Link href={accountPage ? '/loans' : '/login'} className="text-link">
+                {accountPage ? 'Loan options' : 'Sign in'}
               </Link>
-              <Link href="/register" className="button button-primary button-small">
-                Apply
-              </Link>
+              {!accountPage && (
+                <Link href="/#estimate" className="button button-primary button-small">
+                  Get an estimate
+                </Link>
+              )}
               <button
                 className={`menu-button ${open ? 'is-open' : ''}`}
                 aria-label="Toggle navigation"
                 aria-expanded={open}
+                aria-controls="mobile-navigation"
                 onClick={() => setOpen(!open)}
               >
                 <span />
@@ -124,7 +141,7 @@ export default function Layout({
             </div>
           </nav>
           {open && (
-            <div className="mobile-nav mobile-nav-open">
+            <div id="mobile-navigation" className="mobile-nav mobile-nav-open">
               {nav.map(([href, label]) => (
                 <Link key={href} href={href} onClick={() => setOpen(false)}>
                   {label}
@@ -135,7 +152,7 @@ export default function Layout({
             </div>
           )}
         </header>
-        <main key={router.asPath} className="site-main route-view">
+        <main id="main-content" tabIndex={-1} className="site-main">
           {children}
         </main>
         <footer className="site-footer">
@@ -143,7 +160,7 @@ export default function Layout({
             <div>
               <Brand />
               <p className="footer-copy">
-                Loan estimates, applications and account tracking in one place.
+                Know the cost. Understand the process. Manage your borrowing.
               </p>
             </div>
             <div className="footer-links">

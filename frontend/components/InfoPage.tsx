@@ -1,14 +1,16 @@
 import Layout from './Layout';
 export default function InfoPage({
   title,
+  description,
   children,
 }: {
   title: string;
+  description: string;
   children: React.ReactNode;
 }) {
   return (
-    <Layout title={`${title} | PataPesa`}>
-      <article className="prose prose-slate mx-auto max-w-3xl border-t-4 border-pata-900 bg-[#fffefa] p-7 sm:p-12">
+    <Layout title={`${title} | PataPesa`} description={description}>
+      <article className="info-article">
         <p className="eyebrow">PataPesa information</p>
         <h1 className="section-heading">{title}</h1>
         {children}

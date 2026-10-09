@@ -3,10 +3,18 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { body, param, validationResult } from 'express-validator';
-import { AuthRequest, clearAuthCookie, createToken, requireAuth, setAuthCookie } from './auth';
+import {
+  AuthRequest,
+  clearAuthCookie,
+  createSession,
+  revokeSession,
+  requireAuth,
+  setAuthCookie,
+} from './auth';
 import { config } from './config';
 import { query, transaction } from './db';
 import { sendPasswordReset } from './email';
+import { isRecentKenyanPaymentDate } from './kenya-date';
 import { calculateLoan } from './loan-calculator';
 import { requirePermission } from './permissions';
 import adminRoutes from './admin-routes';
@@ -32,10 +40,27 @@ const passwordRule = () =>
     .matches(/[^A-Za-z0-9]/)
     .withMessage('Use 10–128 characters with uppercase, lowercase, number and symbol');
 const authLimiter = rateLimit({
+  message: {
+    success: false,
+    message: 'Too many authentication attempts. Please wait before trying again.',
+  },
   windowMs: 15 * 60 * 1000,
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
+});
+// Only successful logins are excluded; password-reset emails and registration
+// remain limited even when their endpoint returns a successful response.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many sign-in attempts. Please wait before trying again.',
+  },
 });
 const contactLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -335,7 +360,7 @@ router.post(
       await audit(req, 'KYC_SUBMITTED', 'kyc_verification', user.kycId, user.id);
       setAuthCookie(
         res,
-        createToken({ id: user.id, email: user.email, authVersion: user.auth_version }),
+        await createSession({ id: user.id, email: user.email, authVersion: user.auth_version }),
         req.body.remember !== false,
       );
       return res.status(201).json({
@@ -361,7 +386,7 @@ router.post(
 
 router.post(
   '/auth/login',
-  authLimiter,
+  loginLimiter,
   body('email').isEmail().normalizeEmail(),
   body('password').isString().notEmpty(),
   body('remember').optional().isBoolean().toBoolean(),
@@ -402,7 +427,7 @@ router.post(
       await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
       setAuthCookie(
         res,
-        createToken({ id: user.id, email: user.email, authVersion: user.auth_version }),
+        await createSession({ id: user.id, email: user.email, authVersion: user.auth_version }),
         req.body.remember !== false,
       );
       return res.json({
@@ -424,9 +449,14 @@ router.post(
   },
 );
 
-router.post('/auth/logout', (_req, res) => {
-  clearAuthCookie(res);
-  return res.status(204).send();
+router.post('/auth/logout', async (req, res, next) => {
+  try {
+    await revokeSession(req);
+    clearAuthCookie(res);
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.post(
@@ -876,13 +906,8 @@ router.post(
       if (errors.length) return res.status(400).json({ success: false, message: errors[0] });
       const amount = Number(req.body.amount),
         reference = String(req.body.reference).trim().toUpperCase(),
-        paymentDate = new Date(`${req.body.paymentDate}T12:00:00+03:00`),
-        now = Date.now();
-      if (
-        !Number.isFinite(paymentDate.getTime()) ||
-        paymentDate.getTime() > now + 5 * 60_000 ||
-        paymentDate.getTime() < now - 31 * 24 * 60 * 60_000
-      )
+        paymentDate = new Date(`${req.body.paymentDate}T12:00:00+03:00`);
+      if (!isRecentKenyanPaymentDate(req.body.paymentDate, new Date()))
         return res.status(400).json({
           success: false,
           message: 'Payment date must be within the last 31 days and cannot be in the future',

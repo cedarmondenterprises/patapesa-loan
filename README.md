@@ -17,9 +17,9 @@ The customer portal uses an original, mobile-first PataPesa interface. The homep
 
 The database and API have no public host ports. This avoids the former browser bug where visitors were sent to `localhost:5000` on their own device.
 
-## Azure VM deployment
+## AWS Ubuntu VM deployment
 
-Prerequisites: an Ubuntu Azure VM, Docker Engine with the Compose plugin, customer and admin hostnames whose A records point to the VM, and inbound NSG rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP. The examples use `loans.example.com` and `admin.loans.example.com`.
+Prerequisites: an Ubuntu EC2 instance, Docker Engine with the Compose plugin, customer and admin hostnames whose A records point to its public IP, and security-group rules for TCP 80/443 plus UDP 443. Restrict SSH (22) to your administrator IP. An Elastic IP keeps the DNS target stable if the instance is stopped. The examples use `loans.example.com` and `admin.loans.example.com`.
 
 ```bash
 git clone https://github.com/cedarmondenterprises/patapesa-loan.git
@@ -77,14 +77,18 @@ repayments; connect an approved payment provider before handling real funds.
 
 ## Updating safely
 
-Back up first, then pull, rebuild, and verify health:
+On the AWS VM, back up the database first, then pull, rebuild, and verify health. Keep the dump outside the Git checkout and never commit it:
 
 ```bash
-docker compose exec -T postgres pg_dump -U patapesa -d patapesa_db -Fc > patapesa-$(date +%F).dump
+mkdir -p -m 700 "$HOME/patapesa-backups"
+backup_file="$HOME/patapesa-backups/patapesa-$(date +%F-%H%M).dump"
+sudo docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "$backup_file"
+test -s "$backup_file"
 git pull --ff-only
-docker compose build --pull
-docker compose up -d
-docker compose ps
+sudo docker compose build --pull
+sudo docker compose up -d
+sudo docker compose ps
+curl -fsS https://YOUR_DOMAIN/api/health
 ```
 
 Keep `KYC_ENCRYPTION_KEY` stable and backed up securely: changing or losing it makes new encrypted identity values unusable. Never commit `.env` or database dumps.
@@ -157,7 +161,7 @@ sudo docker compose -f docker-compose.yml -f docker-compose.observability.yml up
 Access the dashboards through SSH tunnels from your computer:
 
 ```bash
-ssh -L 3100:127.0.0.1:3100 -L 3002:127.0.0.1:3002 azureuser@YOUR_VM_IP
+ssh -L 3100:127.0.0.1:3100 -L 3002:127.0.0.1:3002 ubuntu@YOUR_VM_IP
 ```
 
 Open `http://127.0.0.1:3100` for Grafana and `http://127.0.0.1:3002` for Uptime Kuma. In Uptime
@@ -181,3 +185,26 @@ cd ../admin && npm ci && npm run type-check && npm run lint && npm run build && 
 ```
 
 Technical hardening does not replace lending authorization, customer disclosures, underwriting, complaints handling, data-protection impact assessment, retention rules, payment-provider approval, monitoring, backups, or an internal staff workflow. Complete those operational and legal controls before accepting real customers or money.
+
+### Session and proxy update (September 2026)
+
+Authentication now requires a server-tracked session. Deploy the backend and both
+web apps together, then reload Caddy to apply its Cloudflare trust list; startup migration creates `auth_sessions` before serving traffic.
+Existing standalone cookies require one new login. Logout revokes only the current
+session; password resets/account auth-version changes still invalidate all sessions.
+Database failures preserve the cookie and return 503 rather than signing users out.
+Expired session rows are pruned during startup migration.
+
+The backend trusts loopback/private Docker hops and the published Cloudflare ranges
+in `backend/src/core/proxy.ts`. Keep the backend and Next.js ports private, and ensure
+the outer reverse proxy overwrites or appends the real TCP peer to X-Forwarded-For.
+Both Next.js proxies append their TCP peer. Client-provided CF-Connecting-IP is never
+used directly. Review Cloudflare ranges when infrastructure changes; do not replace
+this configuration with unrestricted proxy trust. Rate limits are process-local;
+multiple backend replicas require a shared limiter store before scaling out.
+
+General requests allow 600 per 15 minutes to accommodate admin queue polling.
+Failed login attempts remain limited to 10 per 15 minutes per client network;
+successful logins do not consume that quota. Registration/reset requests keep their
+own bounded quota. Health probes and logout do not consume the general quota.
+Both portals pass through Retry-After and show a sign-in retry countdown.

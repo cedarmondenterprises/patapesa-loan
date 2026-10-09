@@ -1,16 +1,16 @@
 :root {
-  --forest: #102a43;
-  --dark: #0a1c2c;
+  --forest: #16332f;
+  --dark: #102622;
   --paper: #ffffff;
-  --canvas: #f5f7f8;
+  --canvas: #f7f8f5;
   --ink: #17212b;
   --muted: #5d6b78;
   --line: #d8e0e5;
-  --copper: #0a7a62;
+  --copper: #176b55;
   --red: #b43f35;
   --green: #19704b;
   --blue: #345d96;
-  font-family: 'Helvetica Neue', Arial, system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
   color: var(--ink);
   background: var(--canvas);
 }
@@ -30,7 +30,7 @@ button {
   cursor: pointer;
 }
 :focus-visible {
-  outline: 3px solid rgba(10, 122, 98, 0.32);
+  outline: 3px solid #176b55;
   outline-offset: 2px;
 }
 .brand {
@@ -1205,5 +1205,274 @@ tbody tr:last-child td {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* Shared PataPesa visual language, tuned for operational density. */
+body {
+  line-height: 1.5;
+}
+button {
+  min-height: 40px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.shell {
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+.sidebar {
+  background: white;
+  color: #42584c;
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  padding: 24px 16px;
+}
+.sidebar .brand {
+  padding: 0 8px 24px;
+  border-color: var(--line);
+}
+.sidebar .brand strong {
+  color: var(--forest);
+}
+.sidebar .brand small {
+  color: #56655e;
+}
+.nav-label {
+  color: #56655e;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.sidebar button {
+  border-radius: 5px;
+  font-size: 14px;
+  padding: 10px 12px;
+}
+.sidebar button:hover {
+  background: #f0f4ef;
+  color: var(--forest);
+}
+.sidebar button.active {
+  color: #104c3d;
+  background: #e8f2eb;
+  box-shadow: inset 3px 0 #176b55;
+  font-weight: 600;
+}
+.sidebar .nav-count {
+  background: #e8ede7;
+  color: #16332f;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.staff-card strong {
+  color: var(--forest);
+}
+.staff-card small,
+.sidebar-footer button {
+  color: #56655e;
+}
+.sidebar-footer {
+  border-color: var(--line);
+  margin-top: 28px;
+}
+.content {
+  padding: 0 36px 60px;
+}
+.top {
+  min-height: 112px;
+}
+.top h1 {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.top small {
+  color: #56655e;
+  font-size: 12px;
+}
+.overline {
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  color: #176b55;
+}
+.role-badge {
+  border-radius: 4px;
+  font-size: 11px;
+}
+.panel,
+.card,
+.integration-card {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.card strong {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.table-wrap {
+  border-radius: 8px;
+}
+th {
+  color: #56655e;
+  background: #f6f8f5;
+  font-size: 12px;
+  font-weight: 600;
+}
+td {
+  font-size: 13px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+tbody tr:hover {
+  background: #f8faf7;
+}
+.actions button,
+.small,
+.primary {
+  border-radius: 5px;
+  font-size: 13px;
+}
+.primary {
+  background: #176b55;
+  color: #fff;
+}
+.primary:hover {
+  background: #104c3d;
+}
+.toolbar input,
+.toolbar select {
+  border-radius: 5px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.admin-login {
+  background: #f7f8f5;
+}
+.login-identity {
+  background: #edf3ed;
+  color: #16332f;
+  border-right: 1px solid var(--line);
+}
+.login-identity .brand strong {
+  color: #16332f;
+}
+.login-identity .brand small,
+.login-identity > small,
+.login-identity p {
+  color: #56655e;
+}
+.login-identity h1 {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 44px;
+  line-height: 1.15;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+}
+.login-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 32px;
+}
+.login-card input {
+  min-height: 48px;
+  border-radius: 5px;
+  font-size: 16px;
+}
+.security-note {
+  line-height: 1.7;
+}
+.refresh-warning {
+  margin-top: 20px;
+  border-left: 3px solid #95601d;
+  background: #fff5e5;
+  padding: 16px;
+  font-size: 14px;
+}
+.refresh-warning button {
+  border: 0;
+  background: transparent;
+  text-decoration: underline;
+  color: inherit;
+  margin-left: 12px;
+}
+.sidebar .admin-menu-toggle {
+  display: none;
+}
+@media (max-width: 780px) {
+  .shell {
+    display: block;
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 16px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sidebar .brand {
+    padding: 0;
+  }
+  .sidebar .admin-menu-toggle {
+    display: block;
+    width: auto;
+    border: 1px solid var(--line);
+    font-size: 12px;
+    min-height: 44px;
+  }
+  .sidebar:not(.sidebar-open) .nav-group,
+  .sidebar:not(.sidebar-open) .sidebar-footer {
+    display: none;
+  }
+  .sidebar .nav-group {
+    display: block;
+    width: 100%;
+    margin: 20px 0 0;
+    overflow: visible;
+  }
+  .sidebar .nav-label {
+    display: block;
+  }
+  .sidebar .nav-group button {
+    width: 100%;
+  }
+  .sidebar .sidebar-footer {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+  }
+  .sidebar .sidebar-footer button {
+    width: 100%;
+    text-align: left;
+  }
+  .content {
+    padding: 0 20px 40px;
+  }
+  .top {
+    min-height: 96px;
+  }
+  .top h1 {
+    font-size: 26px;
+  }
+  .login-identity {
+    min-height: 220px;
+    padding: 24px;
+  }
+  .login-identity h1 {
+    font-size: 32px;
+  }
+  .login-form-wrap {
+    padding: 24px 20px;
+  }
+  .login-card {
+    padding: 24px;
+  }
+  .role-badge {
+    max-width: 130px;
+    text-align: center;
   }
 }
