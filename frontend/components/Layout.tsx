@@ -120,9 +120,7 @@ export default function Layout({
               ))}
             </div>
             <div className="nav-actions">
-              <Link href={accountPage ? '/loans' : '/login'} className="text-link">
-                {accountPage ? 'Loan options' : 'Sign in'}
-              </Link>
+              <Link href="/dashboard" className="text-link nav-dashboard-link">My loan</Link>
               {!accountPage && (
                 <Link href="/#estimate" className="button button-primary button-small">
                   Get an estimate
@@ -149,6 +147,7 @@ export default function Layout({
                 </Link>
               ))}
               <Link href="/login">Sign in</Link>
+              <Link href="/dashboard" onClick={() => setOpen(false)}>Track my loan</Link>
               <Link href="/register">Apply</Link>
             </div>
           )}
