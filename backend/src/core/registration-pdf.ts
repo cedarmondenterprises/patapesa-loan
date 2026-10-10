@@ -11,12 +11,12 @@ export type RegistrationPdfRecord = {
   declarations: Record<string, unknown>;
 };
 
-const forest = '#123c32';
-const copper = '#c88952';
-const ink = '#18211e';
-const muted = '#66736e';
-const line = '#d9dfdc';
-const paper = '#fffdf7';
+const forest = '#2A211C';
+const copper = '#F97316';
+const ink = '#292524';
+const muted = '#6B7280';
+const line = '#E5E7EB';
+const paper = '#FFFFFF';
 const stampInk = '#b54735';
 
 const stampMonths = [
@@ -170,6 +170,7 @@ export async function buildRegistrationPdf(
   };
   const a = record.answers;
   const d = record.declarations;
+  const essentialRegistration = String(d.version || '').endsWith('-essential');
   const stampDate = registrationStampDate(generatedAt);
 
   doc.fillColor(forest).font('Times-Bold').fontSize(25).text('Borrower registration record');
@@ -211,31 +212,40 @@ export async function buildRegistrationPdf(
   section('Applicant identity and contact');
   registrationIdentityRows(record).forEach(([label, input]) => row(label, input));
 
-  section('Residential address');
-  row('Address line 1', a.addressLine1);
-  row('Address line 2', a.addressLine2);
-  row('Town or city', a.city);
-  row('County', a.county);
-  row('Postal code', a.postalCode);
-  row('Country', a.country);
+  if (!essentialRegistration) {
+    section('Residential address');
+    row('Address line 1', a.addressLine1);
+    row('Address line 2', a.addressLine2);
+    row('Town or city', a.city);
+    row('County', a.county);
+    row('Postal code', a.postalCode);
+    row('Country', a.country);
 
-  section('Employment and affordability profile');
-  row('Employment type', a.employmentType);
-  row('Occupation or work status', a.occupation);
-  row('Employer or business', a.employerName);
-  row('Industry or field', a.industry);
-  row('Years in current work', a.yearsOfEmployment);
-  row('Monthly earning range', a.incomeRange);
-  row('Main source of income', a.sourceOfIncome);
-  row('Highest education level', a.educationLevel);
-  row('Marital status (optional)', a.maritalStatus);
-  row('Financial dependants', a.dependants);
+    section('Employment and affordability profile');
+    row('Employment type', a.employmentType);
+    row('Occupation or work status', a.occupation);
+    row('Employer or business', a.employerName);
+    row('Industry or field', a.industry);
+    row('Years in current work', a.yearsOfEmployment);
+    row('Monthly earning range', a.incomeRange);
+    row('Main source of income', a.sourceOfIncome);
+    row('Highest education level', a.educationLevel);
+    row('Marital status (optional)', a.maritalStatus);
+    row('Financial dependants', a.dependants);
+  }
 
   section('Applicant declarations');
   const declarationRows: [string, unknown][] = [
     ['Information is complete and accurate', d.accuracyConfirmed],
     ['Privacy notice acknowledged', d.privacyAcknowledged],
-    ['Eligibility assessment explained and acknowledged', d.eligibilityAssessmentAcknowledged],
+    ...(essentialRegistration
+      ? []
+      : ([
+          [
+            'Eligibility assessment explained and acknowledged',
+            d.eligibilityAssessmentAcknowledged,
+          ],
+        ] as [string, unknown][])),
     ['Electronic records and communications accepted', d.electronicCommunicationsConsent],
     ['Optional marketing communications accepted', d.marketingConsent],
     ['Declaration version', d.version || record.formVersion],

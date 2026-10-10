@@ -7,11 +7,11 @@
   --muted: #667085;
   --line: #dce2dc;
   --paper: #ffffff;
-  --canvas: #f7f8f5;
-  --forest: #16332f;
-  --forest-hover: #102622;
-  --copper: #176b55;
-  --copper-bright: #176b55;
+  --canvas: #fff9f5;
+  --forest: #2a211c;
+  --forest-hover: #1f2937;
+  --copper: #f97316;
+  --copper-bright: #f97316;
 }
 * {
   box-sizing: border-box;
@@ -42,7 +42,7 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-  outline: 3px solid #176b55;
+  outline: 3px solid #f97316;
   outline-offset: 3px;
 }
 
@@ -153,7 +153,7 @@ a {
   box-shadow: none;
 }
 .button-primary:hover {
-  background: #104c3d;
+  background: #c2410c;
   transform: translateY(-1px);
 }
 .button-secondary {
@@ -163,7 +163,7 @@ a {
   border-color: #b8c6e3;
 }
 .button-secondary:hover {
-  background: #edf4f0;
+  background: #fff7ed;
   border-color: var(--forest);
 }
 .button-small {
@@ -226,7 +226,9 @@ textarea.field-control {
   background: #fff;
   border: 1px solid #c9d5ea;
   border-radius: 8px;
-  transition: border 0.15s, box-shadow 0.15s;
+  transition:
+    border 0.15s,
+    box-shadow 0.15s;
 }
 .field textarea,
 textarea.field-control {
@@ -911,9 +913,9 @@ textarea.field-control {
   font-size: 14px;
 }
 .notice-success {
-  background: #eff4ff;
-  border-color: #176b55;
-  color: #104c3d;
+  background: #ecfdf3;
+  border-color: #15805a;
+  color: #166534;
 }
 .notice-error {
   background: #fff1ef;
@@ -1014,7 +1016,7 @@ textarea.field-control {
   height: 17px;
   margin-top: 1px;
   flex: 0 0 auto;
-  accent-color: #176b55;
+  accent-color: #f97316;
 }
 
 .application-tracker {
@@ -1042,8 +1044,8 @@ textarea.field-control {
   overflow-wrap: anywhere;
 }
 .application-current {
-  --current-accent: #176b55;
-  --current-bg: #edf4f0;
+  --current-accent: #f97316;
+  --current-bg: #fff7ed;
   display: grid;
   gap: 22px;
   margin-top: 26px;
@@ -1114,7 +1116,7 @@ textarea.field-control {
   font-weight: 750;
 }
 .application-progress-label span:last-child {
-  color: #176b55;
+  color: #f97316;
 }
 .application-progress-track {
   height: 8px;
@@ -1126,7 +1128,7 @@ textarea.field-control {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #176b55, #3b82f6);
+  background: linear-gradient(90deg, #f97316, #3b82f6);
   transition: width 300ms ease;
 }
 .application-timeline {
@@ -1170,10 +1172,10 @@ textarea.field-control {
   background: #15805a;
 }
 .application-stage-current .application-stage-marker {
-  border: 7px solid #dcebe3;
+  border: 7px solid #ffedd5;
   color: white;
-  background: #176b55;
-  box-shadow: 0 0 0 2px #176b55;
+  background: #f97316;
+  box-shadow: 0 0 0 2px #f97316;
 }
 .application-stage-attention .application-stage-marker {
   border-color: #c24135;
@@ -1193,7 +1195,7 @@ textarea.field-control {
   color: #15805a;
 }
 .application-stage-current .application-stage-state {
-  color: #176b55;
+  color: #f97316;
 }
 .application-stage-attention .application-stage-state {
   color: #b13b31;
@@ -1578,10 +1580,10 @@ textarea.field-control {
   --muted: #667085;
   --line: #d6deee;
   --paper: #ffffff;
-  --canvas: #f7f8f5;
-  --forest: #16332f;
-  --forest-hover: #102622;
-  --copper: #176b55;
+  --canvas: #fff9f5;
+  --forest: #2a211c;
+  --forest-hover: #1f2937;
+  --copper: #f97316;
   --copper-bright: #ff6b45;
 }
 .site-header {
@@ -2218,7 +2220,7 @@ textarea.field-control {
   justify-content: space-between;
   gap: 28px;
   color: #fff;
-  background: #102622;
+  background: #1f2937;
   border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow: 0 18px 60px rgba(7, 19, 47, 0.32);
 }
@@ -2315,7 +2317,9 @@ textarea.field-control {
 }
 .menu-button span {
   transform-origin: center;
-  transition: transform 180ms ease, opacity 140ms ease;
+  transition:
+    transform 180ms ease,
+    opacity 140ms ease;
 }
 .menu-button.is-open span:first-child {
   transform: translateY(6px) rotate(45deg);
@@ -2346,8 +2350,12 @@ textarea.field-control {
 .status-badge,
 .status-badge > span,
 .application-stage-marker {
-  transition: color 220ms ease, background-color 220ms ease, border-color 220ms ease,
-    opacity 220ms ease, transform 220ms ease;
+  transition:
+    color 220ms ease,
+    background-color 220ms ease,
+    border-color 220ms ease,
+    opacity 220ms ease,
+    transform 220ms ease;
 }
 .application-progress-track > span {
   transition: width 650ms cubic-bezier(0.22, 1, 0.36, 1);

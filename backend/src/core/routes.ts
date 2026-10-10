@@ -95,15 +95,6 @@ const incomeRanges = [
   '100000_199999',
   '200000_PLUS',
 ];
-const educationLevels = [
-  'PRIMARY',
-  'SECONDARY',
-  'CERTIFICATE',
-  'DIPLOMA',
-  'BACHELORS',
-  'POSTGRADUATE',
-  'OTHER',
-];
 const loanPurposeCategories = [
   'EMERGENCY',
   'MEDICAL',
@@ -121,10 +112,6 @@ const incomeReference: Record<string, number> = {
   '50000_99999': 50000,
   '100000_199999': 100000,
   '200000_PLUS': 200000,
-};
-const cleanOptional = (value: unknown): string | null => {
-  const text = String(value || '').trim();
-  return text || null;
 };
 const normalizeKenyanPhone = (value: unknown): string => {
   const compact = String(value || '').replace(/[\s()-]/g, '');
@@ -189,31 +176,9 @@ router.post(
     .matches(/^\d{6,10}$/)
     .withMessage('Enter a valid National ID number using 6–10 digits'),
   body('nationality').trim().isLength({ min: 2, max: 3 }).isAlpha(),
-  body('addressLine1').trim().isLength({ min: 5, max: 255 }),
-  body('addressLine2').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
-  body('city').trim().isLength({ min: 2, max: 100 }),
-  body('county').trim().isLength({ min: 2, max: 100 }),
-  body('postalCode').optional({ values: 'falsy' }).trim().isLength({ max: 20 }),
-  body('employmentType').isIn(employmentTypes),
-  body('occupation').trim().isLength({ min: 2, max: 100 }),
-  body('employerName').optional({ values: 'falsy' }).trim().isLength({ max: 255 }),
-  body('industry').trim().isLength({ min: 2, max: 100 }),
-  body('yearsOfEmployment').isInt({ min: 0, max: 80 }).toInt(),
-  body('incomeRange').isIn(incomeRanges),
-  body('sourceOfIncome').trim().isLength({ min: 2, max: 120 }),
-  body('educationLevel').isIn(educationLevels),
-  body('maritalStatus')
-    .optional({ values: 'falsy' })
-    .isIn(['SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED', 'PREFER_NOT_TO_SAY']),
-  body('dependants').isInt({ min: 0, max: 30 }).toInt(),
-  body('accuracyConfirmed').equals('true').withMessage('Confirm that your information is accurate'),
-  body('privacyAcknowledged').equals('true').withMessage('Acknowledge the privacy notice'),
-  body('eligibilityAssessmentAcknowledged')
+  body('termsAccepted')
     .equals('true')
-    .withMessage('Acknowledge the eligibility assessment described'),
-  body('electronicCommunicationsConsent')
-    .equals('true')
-    .withMessage('Consent to electronic records and communications'),
+    .withMessage('Accept the terms and privacy notice to create an account'),
   body('marketingConsent').optional().isBoolean().toBoolean(),
   body('remember').optional().isBoolean().toBoolean(),
   passwordRule(),
@@ -222,26 +187,7 @@ router.post(
       const errors = errorsFor(req);
       if (errors.length)
         return res.status(400).json({ success: false, message: errors[0], errors });
-      const {
-        firstName,
-        lastName,
-        email,
-        phone,
-        password,
-        dateOfBirth,
-        nationality,
-        addressLine1,
-        city,
-        county,
-        employmentType,
-        occupation,
-        industry,
-        yearsOfEmployment,
-        incomeRange,
-        sourceOfIncome,
-        educationLevel,
-        dependants,
-      } = req.body;
+      const { firstName, lastName, email, phone, password, dateOfBirth, nationality } = req.body;
       const hash = await bcrypt.hash(password, 12);
       const nationalIdNumber = String(req.body.nationalIdNumber),
         nationalIdCipher = encryptSensitive(nationalIdNumber, config.kycEncryptionKey),
@@ -259,31 +205,16 @@ router.post(
         dateOfBirth,
         nationalIdLast4,
         nationality: String(nationality).toUpperCase(),
-        addressLine1,
-        addressLine2: cleanOptional(req.body.addressLine2),
-        city,
-        county,
-        postalCode: cleanOptional(req.body.postalCode),
         country: 'Kenya',
-        employmentType,
-        occupation,
-        employerName: cleanOptional(req.body.employerName),
-        industry,
-        yearsOfEmployment,
-        incomeRange,
-        sourceOfIncome,
-        educationLevel,
-        maritalStatus: cleanOptional(req.body.maritalStatus),
-        dependants,
       };
       const declarations = {
         accuracyConfirmed: true,
         privacyAcknowledged: true,
-        eligibilityAssessmentAcknowledged: true,
+        eligibilityAssessmentAcknowledged: false,
         electronicCommunicationsConsent: true,
         marketingConsent: req.body.marketingConsent === true,
         acceptedAt: new Date().toISOString(),
-        version: registrationVersion,
+        version: `${registrationVersion}-essential`,
       };
       const user = await transaction(async (client) => {
         const created = (
@@ -307,29 +238,6 @@ router.post(
             ],
           )
         ).rows[0];
-        await client.query(
-          `INSERT INTO user_profiles(user_id,employment_type,employment_status,employer_name,occupation,industry,years_of_employment,educational_qualification,marital_status,number_of_dependents,address_line1,address_line2,city,state_province,postal_code,country,income_range,source_of_income,profile_completed_at)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Kenya',$16,$17,NOW())`,
-          [
-            created.id,
-            employmentType,
-            employmentType,
-            cleanOptional(req.body.employerName),
-            occupation,
-            industry,
-            yearsOfEmployment,
-            educationLevel,
-            cleanOptional(req.body.maritalStatus),
-            dependants,
-            addressLine1,
-            cleanOptional(req.body.addressLine2),
-            city,
-            county,
-            cleanOptional(req.body.postalCode),
-            incomeRange,
-            sourceOfIncome,
-          ],
-        );
         const kyc = (
           await client.query<{ id: string }>(
             `INSERT INTO kyc_verifications(user_id,id_type,id_number,id_number_ciphertext,id_number_hash,id_number_last4,verification_status)
@@ -704,6 +612,12 @@ router.post(
     .trim()
     .isLength({ min: 3, max: 160 })
     .withMessage('Explain how you expect to repay this loan'),
+  body('employmentType').isIn(employmentTypes),
+  body('incomeRange').isIn(incomeRanges),
+  body('sourceOfIncome')
+    .trim()
+    .isLength({ min: 2, max: 120 })
+    .withMessage('Enter your main source of income'),
   body('existingMonthlyDebt').isFloat({ min: 0, max: 10000000 }).toFloat(),
   body('declarationAccepted')
     .equals('true')
@@ -714,6 +628,14 @@ router.post(
       const errors = errorsFor(req);
       if (errors.length)
         return res.status(400).json({ success: false, message: errors[0], errors });
+      await query(
+        `INSERT INTO user_profiles(user_id,employment_type,employment_status,income_range,source_of_income,profile_completed_at,country)
+         VALUES($1,$2,$2,$3,$4,NOW(),'Kenya')
+         ON CONFLICT(user_id) DO UPDATE SET employment_type=EXCLUDED.employment_type,
+           employment_status=EXCLUDED.employment_status,income_range=EXCLUDED.income_range,
+           source_of_income=EXCLUDED.source_of_income,profile_completed_at=NOW(),updated_at=NOW()`,
+        [userId(req), req.body.employmentType, req.body.incomeRange, req.body.sourceOfIncome],
+      );
       const eligibility = (
         await query<{
           age_years: number | null;

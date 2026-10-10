@@ -22,7 +22,7 @@ export default function AuthShell({
       <Head>
         <title>{`${title} | PataPesa`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#16332f" />
+        <meta name="theme-color" content="#F97316" />
         <meta name="robots" content="noindex, nofollow" />
         <link rel="icon" href="/favicon.svg" />
       </Head>

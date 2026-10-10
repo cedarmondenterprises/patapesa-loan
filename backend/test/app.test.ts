@@ -89,7 +89,6 @@ describe('API security and authentication surface', () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb' }],
       })
@@ -107,6 +106,7 @@ describe('API security and authentication surface', () => {
         dateOfBirth: '1992-04-12',
         nationalIdNumber: '12345678',
         nationality: 'KEN',
+        termsAccepted: true,
         addressLine1: '12 Market Road',
         addressLine2: '',
         city: 'Nairobi',
@@ -135,18 +135,18 @@ describe('API security and authentication surface', () => {
     expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
     expect(response.body.message).toContain('account is active');
     expect(response.body.data.registrationReference).toMatch(/^PPR-/);
-    expect(clientQuery).toHaveBeenCalledTimes(4);
-    expect(clientQuery.mock.calls[2][0]).toContain('INSERT INTO kyc_verifications');
-    expect(clientQuery.mock.calls[2][1][3]).toBe('5678');
-    const storedAnswers = JSON.parse(String(clientQuery.mock.calls[3][1][3])) as Record<
+    expect(clientQuery).toHaveBeenCalledTimes(3);
+    expect(clientQuery.mock.calls[1][0]).toContain('INSERT INTO kyc_verifications');
+    expect(clientQuery.mock.calls[1][1][3]).toBe('5678');
+    const storedAnswers = JSON.parse(String(clientQuery.mock.calls[2][1][3])) as Record<
       string,
       unknown
     >;
     expect(storedAnswers.nationalIdLast4).toBe('5678');
     expect(storedAnswers).not.toHaveProperty('nationalIdNumber');
-    expect(clientQuery.mock.calls[3][0]).toContain('national_id_ciphertext');
-    expect(clientQuery.mock.calls[3][1][5]).not.toBe('12345678');
-    expect(clientQuery.mock.calls[3][1][6]).toBe('5678');
+    expect(clientQuery.mock.calls[2][0]).toContain('national_id_ciphertext');
+    expect(clientQuery.mock.calls[2][1][5]).not.toBe('12345678');
+    expect(clientQuery.mock.calls[2][1][6]).toBe('5678');
   });
 
   it('rejects registration when the date of birth is today', async () => {
@@ -162,6 +162,7 @@ describe('API security and authentication surface', () => {
         dateOfBirth: today,
         nationalIdNumber: '87654321',
         nationality: 'KEN',
+        termsAccepted: true,
         addressLine1: '12 Market Road',
         addressLine2: '',
         city: 'Nairobi',
@@ -278,6 +279,7 @@ describe('API security and authentication surface', () => {
     );
     queryMock
       .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
       ])
@@ -312,6 +314,9 @@ describe('API security and authentication surface', () => {
         term: 12,
         purposeCategory: 'BUSINESS',
         purpose: 'Purchase additional stock for my retail shop',
+        employmentType: 'SELF_EMPLOYED',
+        incomeRange: '50000_99999',
+        sourceOfIncome: 'Retail business income',
         repaymentSource: 'Monthly retail business income',
         existingMonthlyDebt: 0,
         declarationAccepted: true,
@@ -319,7 +324,7 @@ describe('API security and authentication surface', () => {
       });
     expect(response.status).toBe(201);
     expect(response.body.data.status).toBe('SUBMITTED');
-    expect(queryMock.mock.calls[5][0]).toContain("'SUBMITTED'");
+    expect(queryMock.mock.calls[6][0]).toContain("'SUBMITTED'");
   });
 
   it('returns the original loan when a timed-out submission is replayed', async () => {
@@ -331,6 +336,7 @@ describe('API security and authentication surface', () => {
     );
     queryMock
       .mockResolvedValueOnce([{ id, email: 'user@example.com', auth_version: 0 }])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { age_years: 34, profile_completed_at: '2026-09-13', income_range: '50000_99999' },
       ])
@@ -351,6 +357,9 @@ describe('API security and authentication surface', () => {
         term: 12,
         purposeCategory: 'BUSINESS',
         purpose: 'Purchase additional stock for my retail shop',
+        employmentType: 'SELF_EMPLOYED',
+        incomeRange: '50000_99999',
+        sourceOfIncome: 'Retail business income',
         repaymentSource: 'Monthly retail business income',
         existingMonthlyDebt: 0,
         declarationAccepted: true,
@@ -358,7 +367,7 @@ describe('API security and authentication surface', () => {
       });
     expect(response.status).toBe(200);
     expect(response.body.data.applicationNumber).toBe('PPL-TEST');
-    expect(queryMock).toHaveBeenCalledTimes(3);
+    expect(queryMock).toHaveBeenCalledTimes(4);
   });
 
   it('allows a permitted staff member to read the review queue', async () => {

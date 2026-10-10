@@ -27,6 +27,9 @@ type LoanDraft = {
   purposeCategory: string;
   purpose: string;
   repaymentSource: string;
+  employmentType: string;
+  incomeRange: string;
+  sourceOfIncome: string;
   existingMonthlyDebt: number;
 };
 
@@ -41,6 +44,9 @@ export default function Loans() {
     [purposeCategory, setPurposeCategory] = useState(''),
     [purpose, setPurpose] = useState(''),
     [repaymentSource, setRepaymentSource] = useState(''),
+    [employmentType, setEmploymentType] = useState(''),
+    [incomeRange, setIncomeRange] = useState(''),
+    [sourceOfIncome, setSourceOfIncome] = useState(''),
     [existingMonthlyDebt, setExistingMonthlyDebt] = useState(0),
     [declarationAccepted, setDeclarationAccepted] = useState(false),
     [requestId, setRequestId] = useState(''),
@@ -81,6 +87,9 @@ export default function Loans() {
             setPurposeCategory(draft.purposeCategory || '');
             setPurpose(draft.purpose || '');
             setRepaymentSource(draft.repaymentSource || '');
+            setEmploymentType(draft.employmentType || '');
+            setIncomeRange(draft.incomeRange || '');
+            setSourceOfIncome(draft.sourceOfIncome || '');
             setExistingMonthlyDebt(
               Number.isFinite(draft.existingMonthlyDebt) ? draft.existingMonthlyDebt : 0,
             );
@@ -124,6 +133,9 @@ export default function Loans() {
         purposeCategory,
         purpose,
         repaymentSource,
+        employmentType,
+        incomeRange,
+        sourceOfIncome,
         existingMonthlyDebt,
       };
       try {
@@ -137,6 +149,9 @@ export default function Loans() {
     amount,
     draftReady,
     existingMonthlyDebt,
+    employmentType,
+    incomeRange,
+    sourceOfIncome,
     purpose,
     purposeCategory,
     repaymentSource,
@@ -162,6 +177,9 @@ export default function Loans() {
     setPurposeCategory('');
     setPurpose('');
     setRepaymentSource('');
+    setEmploymentType('');
+    setIncomeRange('');
+    setSourceOfIncome('');
     setExistingMonthlyDebt(0);
     setDeclarationAccepted(false);
     setRequestId(crypto.randomUUID());
@@ -197,6 +215,9 @@ export default function Loans() {
             purposeCategory,
             purpose,
             repaymentSource,
+            employmentType,
+            incomeRange,
+            sourceOfIncome,
             existingMonthlyDebt,
             declarationAccepted,
             requestId,
@@ -375,6 +396,52 @@ export default function Loans() {
                     required
                   />
                   <small className="helper">Give enough detail for a responsible review.</small>
+                </label>
+                <label className="field">
+                  <span>Employment type</span>
+                  <select
+                    value={employmentType}
+                    onChange={(e) => setEmploymentType(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose one</option>
+                    <option value="SALARIED">Salaried employee</option>
+                    <option value="SELF_EMPLOYED">Self-employed</option>
+                    <option value="BUSINESS_OWNER">Business owner</option>
+                    <option value="UNEMPLOYED">Not currently employed</option>
+                    <option value="STUDENT">Student</option>
+                    <option value="RETIRED">Retired</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Monthly income range</span>
+                  <select
+                    value={incomeRange}
+                    onChange={(e) => setIncomeRange(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose a range</option>
+                    <option value="BELOW_15000">Below KES 15,000</option>
+                    <option value="15000_29999">KES 15,000–29,999</option>
+                    <option value="30000_49999">KES 30,000–49,999</option>
+                    <option value="50000_99999">KES 50,000–99,999</option>
+                    <option value="100000_199999">KES 100,000–199,999</option>
+                    <option value="200000_PLUS">KES 200,000 or more</option>
+                  </select>
+                  <small className="helper">
+                    Asked only when you apply so we can check affordability.
+                  </small>
+                </label>
+                <label className="field">
+                  <span>Main source of income</span>
+                  <input
+                    minLength={2}
+                    maxLength={120}
+                    value={sourceOfIncome}
+                    onChange={(e) => setSourceOfIncome(e.target.value)}
+                    placeholder="Salary, business, farming…"
+                    required
+                  />
                 </label>
                 <label className="field">
                   <span>How will you repay this loan?</span>
