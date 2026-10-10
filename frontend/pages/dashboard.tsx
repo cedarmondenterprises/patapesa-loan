@@ -144,6 +144,9 @@ export default function Dashboard() {
       (payment) =>
         payment.loanId === featuredLoan?.id && ['PENDING', 'PROCESSING'].includes(payment.status),
     ),
+    repaymentProgress = featuredLoan && Number(featuredLoan.totalPayable) > 0
+      ? Math.min(100, Math.max(0, Math.round((Number(featuredLoan.paid) / Number(featuredLoan.totalPayable)) * 100)))
+      : 0,
     recentActivity = [
       ...apps.slice(0, 3).map((app) => ({
         key: app.id,
@@ -223,7 +226,7 @@ export default function Dashboard() {
           {message}
         </p>
       )}
-      <div className="account-feature-grid">
+      <div className={`account-feature-grid${featuredLoan ? ' account-feature-grid-has-loan' : ''}`}>
         {latest ? <ApplicationJourney application={latest} kyc={kyc} /> : (
           <section id="application-progress" className="account-progress-card account-card">
             <div className="account-card-icon" aria-hidden="true">✦</div>
@@ -240,9 +243,19 @@ export default function Dashboard() {
             <>
               <p className="account-balance-label">Outstanding balance · {featuredLoan.loanNumber}</p>
               <strong className="account-balance-amount">{money(featuredLoan.outstanding)}</strong>
+              <div className="account-repaid-summary">
+                <div className="account-repaid-labels">
+                  <span>Repaid so far</span>
+                  <strong>{money(featuredLoan.paid)} of {money(featuredLoan.totalPayable)}</strong>
+                </div>
+                <div className="account-repaid-track" role="progressbar" aria-label="Loan repaid" aria-valuenow={repaymentProgress} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`${money(featuredLoan.paid)} of ${money(featuredLoan.totalPayable)} repaid`}>
+                  <span style={{ width: `${repaymentProgress}%` }} />
+                </div>
+              </div>
               <div className="account-next-due">
                 <span>{featuredDue ? 'Next instalment' : 'Repayment status'}</span>
-                <strong>{featuredDue ? `${money(featuredDue.remaining)} · ${new Date(featuredDue.dueDate).toLocaleDateString('en-KE')}` : Number(featuredLoan.outstanding) === 0 ? 'No outstanding balance' : 'See repayment schedule'}</strong>
+                <strong>{featuredDue ? money(featuredDue.remaining) : Number(featuredLoan.outstanding) === 0 ? 'No outstanding balance' : 'See repayment schedule'}</strong>
+                {featuredDue && <small>Due {new Date(featuredDue.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</small>}
               </div>
               {Number(featuredLoan.outstanding) > 0 && ['ACTIVE', 'DEFAULTED'].includes(featuredLoan.status) ? (
                 <a href={pendingFeaturedPayment ? '#repayments' : '#submit-repayment'} className="button button-primary account-balance-action">{pendingFeaturedPayment ? 'View payment status' : 'Submit payment details'} <span aria-hidden="true">→</span></a>
@@ -329,9 +342,21 @@ export default function Dashboard() {
             onError={(error) => setMessage(`Payment failed: ${error}`)}
           />
           {installments.length > 0 && (
-            <div className="mt-8 overflow-x-auto border-t border-pata-900/15 pt-6">
+            <div className="account-record-section mt-8 border-t border-pata-900/15 pt-6">
               <h3 className="font-bold text-pata-950">Repayment schedule</h3>
-              <table className="mt-4 w-full min-w-[680px] text-left text-sm">
+              <p className="account-record-description">See what is due, what is paid and the status of each instalment.</p>
+              <ol className="account-mobile-records" aria-label="Repayment schedule">
+                {installments.map((item) => (
+                  <li className="account-mobile-record" key={item.id}>
+                    <div className="account-mobile-record-heading">
+                      <div><span className="account-mobile-record-eyebrow">Instalment {item.sequence}</span><strong>{money(item.remaining)} remaining</strong></div>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <div className="account-mobile-record-details"><span>Due {new Date(item.dueDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span>{money(item.totalDue)} total</span></div>
+                  </li>
+                ))}
+              </ol>
+              <div className="account-desktop-records overflow-x-auto"><table className="mt-4 w-full min-w-[680px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
                     <th className="pb-3">Instalment</th>
@@ -354,16 +379,29 @@ export default function Dashboard() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
           {payments.length > 0 && (
-            <div className="mt-8 overflow-x-auto border-t border-pata-900/15 pt-6">
+            <div className="account-record-section mt-8 border-t border-pata-900/15 pt-6">
               <h3 className="font-bold text-pata-950">Payment history</h3>
               <p className="mt-2 text-sm text-slate-500">
                 Pending payments affect your balance only after verification.
               </p>
-              <table className="mt-4 w-full min-w-[650px] text-left text-sm">
+              <ol className="account-mobile-records" aria-label="Payment history">
+                {payments.map((payment) => (
+                  <li className="account-mobile-record" key={payment.id}>
+                    <div className="account-mobile-record-heading">
+                      <div><span className="account-mobile-record-eyebrow">{payment.loanNumber}</span><strong>{money(payment.amount)}</strong></div>
+                      <StatusBadge status={payment.status} />
+                    </div>
+                    <div className="account-mobile-record-details"><span>{new Date(payment.paymentDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</span><span>{payment.method.replace(/_/g, ' ').toLowerCase()}</span></div>
+                    <small className="account-mobile-record-reference">Reference {payment.reference}</small>
+                    {payment.failureReason && <small className="account-mobile-record-error">{payment.failureReason}</small>}
+                  </li>
+                ))}
+              </ol>
+              <div className="account-desktop-records overflow-x-auto"><table className="mt-4 w-full min-w-[650px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
                     <th className="pb-3">Loan</th>
@@ -393,7 +431,7 @@ export default function Dashboard() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </section>
@@ -416,7 +454,20 @@ export default function Dashboard() {
             )}
           </div>
           {apps.length ? (
-            <div className="mt-7 overflow-x-auto">
+            <div className="mt-7">
+              <ol className="account-mobile-records" aria-label="Application history">
+                {apps.map((application) => (
+                  <li className="account-mobile-record" key={application.id}>
+                    <div className="account-mobile-record-heading">
+                      <div><span className="account-mobile-record-eyebrow">Application</span><strong>{money(application.amount)}</strong></div>
+                      <StatusBadge status={application.status} />
+                    </div>
+                    <div className="account-mobile-record-details"><span>Submitted {new Date(application.createdAt).toLocaleDateString('en-KE', { day: 'numeric', month: 'long', year: 'numeric' })}</span></div>
+                    <small className="account-mobile-record-reference">Reference {application.applicationNumber}</small>
+                  </li>
+                ))}
+              </ol>
+              <div className="account-desktop-records overflow-x-auto">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-pata-900/15 text-xs uppercase tracking-wider text-slate-500">
@@ -439,6 +490,7 @@ export default function Dashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           ) : (
             <Empty
@@ -741,6 +793,7 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
   const approved = ['APPROVED', 'DISBURSED', 'COMPLETED'].includes(status);
   const identityApproved = kyc?.status === 'APPROVED';
   const identityNeedsAction = !kyc || ['REJECTED', 'EXPIRED'].includes(kyc.status);
+  const currentStage = fundsRecorded || approved ? 4 : rejected || identityApproved ? 3 : 2;
   const summary = rejected
     ? { label: 'Decision recorded', title: 'Application not approved', detail: 'Read the reason below. Contact support if you need help understanding the decision.', tone: 'danger' }
     : fundsRecorded
@@ -782,6 +835,7 @@ function ApplicationJourney({ application, kyc }: { application: Application; ky
       <h2 id="application-progress-title">{summary.title}</h2>
       <p className="account-progress-intro">{summary.detail}</p>
       <p className="account-progress-meta">{money(application.amount)} · Reference {application.applicationNumber}</p>
+      <p className="account-progress-count">{fundsRecorded ? 'All stages complete' : rejected ? 'Application closed' : `Stage ${currentStage} of 4`} <span aria-hidden="true">·</span> {summary.label}</p>
       <ol className="account-progress-steps" aria-label="Loan application stages">
         {stages.map((stage) => (
           <li key={stage.label} className={`account-progress-step account-progress-step-${stage.state}`} aria-current={stage.state === 'current' ? 'step' : undefined}>

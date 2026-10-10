@@ -90,6 +90,16 @@
 }
 .account-feature-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(290px, .9fr); gap: 18px; align-items: stretch; }
 .account-progress-card { background: linear-gradient(145deg, #f2fbf5 0%, #f9fdf9 68%, #fff 100%); }
+.account-balance-card { color: #fff; border-color: #075844; background: radial-gradient(circle at 95% 0%, rgba(126, 221, 174, .18), transparent 38%), linear-gradient(145deg, #08694e, #073d35); box-shadow: 0 16px 34px rgba(7, 62, 48, .16); }
+.account-balance-card .account-card-icon { color: #e4fff1; background: rgba(255, 255, 255, .15); }
+.account-balance-card .account-card-tag { color: #ecfff5; background: rgba(255, 255, 255, .15); }
+.account-balance-card .account-balance-amount, .account-balance-card .account-next-due strong, .account-balance-card .account-no-balance strong { color: #fff; }
+.account-balance-card .account-balance-label, .account-balance-card .account-next-due span, .account-balance-card .account-next-due small, .account-balance-card .account-balance-hint, .account-balance-card .account-no-balance p { color: #d4e9e2; }
+.account-balance-card .account-next-due { border-color: rgba(255, 255, 255, .24); }
+.account-balance-card .account-next-due small { display: block; font-size: 12px; }
+.account-balance-card .account-balance-action { color: #074738; background: #e6f8eb; border-color: #e6f8eb; }
+.account-balance-card .account-balance-action:hover { background: #fff; border-color: #fff; }
+.account-balance-card .account-no-balance a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 .account-progress-danger { background: linear-gradient(145deg, #fff5f2, #fff); }
 .account-progress-success { background: linear-gradient(145deg, #effaf5, #fff); }
 .account-progress-topline,
@@ -100,8 +110,11 @@
 .account-card-kicker { margin: 0 0 7px; color: #52766b; font-size: 12px; font-weight: 750; }
 .account-progress-card h2,
 .account-balance-card h2 { margin: 0; color: var(--account-ink); font-size: clamp(21px, 2vw, 26px); font-weight: 800; letter-spacing: -.035em; line-height: 1.2; }
+.account-balance-card h2 { color: #fff; }
 .account-progress-intro { max-width: 620px; margin: 9px 0 0; color: #546873; font-size: 14px; line-height: 1.55; }
 .account-progress-meta { margin: 10px 0 0; color: #627a75; font-size: 12px; overflow-wrap: anywhere; }
+.account-progress-count { display: inline-flex; align-items: center; gap: 7px; margin: 24px 0 0; padding: 7px 11px; border-radius: 100px; color: #075844; background: #e0f3e7; font-size: 11px; font-weight: 800; }
+.account-progress-danger .account-progress-count { color: #8b3028; background: #ffe5dc; }
 .account-progress-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 32px 0 0; padding: 0; list-style: none; }
 .account-progress-step { position: relative; min-width: 0; padding: 0 6px 0 0; }
 .account-progress-step:not(:last-child)::after { position: absolute; top: 14px; right: 0; left: 30px; height: 2px; background: #ccd8d2; content: ''; }
@@ -121,6 +134,11 @@
 .account-progress-card > .button { margin-top: 22px; }
 .account-balance-label { margin: 24px 0 2px; color: var(--account-muted); font-size: 13px; }
 .account-balance-amount { display: block; color: var(--account-ink); font-size: clamp(29px, 3vw, 39px); font-weight: 850; letter-spacing: -.04em; line-height: 1.2; }
+.account-repaid-summary { margin-top: 22px; }
+.account-repaid-labels { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; color: #d4e9e2; font-size: 12px; }
+.account-repaid-labels strong { color: #fff; font-size: 12px; font-weight: 750; }
+.account-repaid-track { height: 8px; overflow: hidden; margin-top: 10px; border-radius: 100px; background: rgba(255, 255, 255, .24); }
+.account-repaid-track span { display: block; height: 100%; border-radius: inherit; background: #9ce5b9; }
 .account-next-due { display: grid; gap: 5px; margin-top: 22px; padding-top: 19px; border-top: 1px solid var(--account-line); }
 .account-next-due span { color: var(--account-muted); font-size: 12px; }
 .account-next-due strong { color: var(--account-ink); font-size: 15px; }
@@ -151,6 +169,8 @@
 .account-main .surface.account-detail-section { border-color: var(--account-line); border-radius: 17px; }
 .account-main .account-detail-section h2 { color: var(--account-ink); }
 .account-main .account-detail-section article { border-radius: 11px; }
+.account-record-description { margin-top: 7px; color: #69798a; font-size: 13px; }
+.account-mobile-records { display: none; }
 .account-support-note { border: 1px solid #d7e9dc; border-radius: 14px; background: #edf8f0; }
 .account-main .repayment-entry { border-color: #d7e9dc; border-radius: 12px; background: #f5fbf6; }
 .account-main .repayment-form { border-color: #d7e9dc; border-radius: 11px; }
@@ -176,6 +196,26 @@
   .account-topbar-label { display: none; }
   .account-main { padding: 32px 22px 104px; }
   .account-feature-grid { grid-template-columns: minmax(0, 1fr); }
+  .account-feature-grid-has-loan .account-balance-card { order: -1; }
+  .account-progress-steps { grid-template-columns: minmax(0, 1fr); margin-top: 18px; }
+  .account-progress-step { display: grid; grid-template-columns: 29px minmax(0, 1fr); column-gap: 13px; min-height: 55px; padding: 0 0 13px; }
+  .account-progress-step:not(:last-child)::after { top: 28px; bottom: 0; left: 14px; width: 2px; height: auto; }
+  .account-progress-marker { grid-row: 1 / span 2; margin-bottom: 0; }
+  .account-progress-step strong { align-self: end; font-size: 14px; }
+  .account-progress-step small { grid-column: 2; margin-top: 3px; font-size: 12px; }
+  .account-progress-step-skipped { opacity: .75; }
+  .account-desktop-records { display: none; }
+  .account-mobile-records { display: grid; gap: 11px; margin: 17px 0 0; padding: 0; list-style: none; }
+  .account-mobile-record { min-width: 0; padding: 16px; border: 1px solid #dce9e1; border-radius: 13px; background: #f8fbf8; }
+  .account-mobile-record-heading { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+  .account-mobile-record-heading > div { min-width: 0; }
+  .account-mobile-record-eyebrow { display: block; margin-bottom: 5px; color: #667b72; font-size: 11px; font-weight: 700; }
+  .account-mobile-record-heading strong { display: block; color: #153c31; font-size: 18px; line-height: 1.25; }
+  .account-mobile-record-heading .status-badge { flex: none; }
+  .account-mobile-record-details { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; margin-top: 14px; color: #526b61; font-size: 12px; }
+  .account-mobile-record-reference { display: block; margin-top: 11px; overflow-wrap: anywhere; color: #61756c; font-size: 11px; }
+  .account-mobile-record-error { display: block; margin-top: 9px; color: #a12f27; font-size: 12px; }
+  .account-main .repayment-entry { margin-right: 0; margin-left: 0; padding: 20px; }
   .account-bottom-nav { position: fixed; z-index: 80; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(5, 1fr); padding: 9px 5px max(9px, env(safe-area-inset-bottom)); border-top: 1px solid var(--account-line); background: #fff; box-shadow: 0 -7px 25px rgba(17, 39, 30, .05); }
   .account-bottom-nav a { display: grid; place-items: center; gap: 4px; min-width: 0; color: #617269; font-size: 10px; line-height: 1.2; text-align: center; }
   .account-bottom-nav a[aria-current="page"] { color: var(--account-green); font-weight: 800; }
@@ -188,9 +228,9 @@
   .account-signout { padding: 7px 10px; font-size: 11px; }
   .account-main { padding: 28px 16px 80px; }
   .account-card { padding: 21px; border-radius: 15px; }
-  .account-progress-steps { margin-top: 28px; }
-  .account-progress-step strong { font-size: 10px; }
-  .account-progress-step small { font-size: 10px; }
+  .account-progress-count { margin-top: 18px; }
+  .account-progress-steps { margin-top: 19px; }
+  .account-balance-card .account-balance-amount { font-size: 38px; }
   .account-insights-grid { grid-template-columns: minmax(0, 1fr); gap: 13px; margin-top: 13px; }
   .account-insights-grid > :last-child { grid-column: auto; }
   .account-insight-card { min-height: 0; }
