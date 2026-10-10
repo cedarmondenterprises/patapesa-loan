@@ -85,10 +85,10 @@ export default function Home() {
   }
   const amountValid = Boolean(
     product &&
-      amountText !== '' &&
-      Number(amountText) >= Number(product.minAmount) &&
-      Number(amountText) <= Number(product.maxAmount) &&
-      Number.isInteger(Number(amountText)),
+    amountText !== '' &&
+    Number(amountText) >= Number(product.minAmount) &&
+    Number(amountText) <= Number(product.maxAmount) &&
+    Number.isInteger(Number(amountText)),
   );
   return (
     <Layout
@@ -97,48 +97,53 @@ export default function Home() {
     >
       <section className="home-hero">
         <div className="hero-story">
-          <p className="eyebrow">Your borrowing, made clearer</p>
+          <p className="eyebrow">Simple, transparent loans</p>
           <h1>
-            Know your loan.
+            See the full cost.
             <br />
-            <em>Every step of the way.</em>
+            <em>Then decide.</em>
           </h1>
           <p className="hero-description">
-            Understand the cost before you apply. Then see your application status, next steps and
-            repayment details in one place.
+            Choose an amount, see the estimated repayment and apply only when it works for you.
           </p>
           <div className="hero-actions">
-            <Link className="button button-primary" href="/dashboard">
-              Track my loan <span aria-hidden="true">→</span>
-            </Link>
-            <a className="button button-secondary" href="#estimate">
-              Get an estimate
+            <a className="button button-primary" href="#estimate">
+              Check my estimate <span aria-hidden="true">→</span>
             </a>
+            <Link className="button button-secondary" href="/login">
+              Sign in
+            </Link>
           </div>
-          <p className="hero-caption">Already have an account? Sign in to see your real progress.</p>
+          <p className="hero-caption">
+            No hidden questionnaire. Creating an account takes only the essentials.
+          </p>
         </div>
         <div className="home-account-preview" aria-label="Preview of the customer account">
           <div className="home-preview-topline">
-            <span className="home-preview-icon" aria-hidden="true">▤</span>
-            <span>Inside your account</span>
-            <span className="home-preview-chip">Preview</span>
+            <span className="home-preview-icon" aria-hidden="true">
+              ✓
+            </span>
+            <span>Before you apply</span>
+            <span className="home-preview-chip">Clear costs</span>
           </div>
           <div className="home-preview-progress">
-            <p className="home-preview-kicker">Your application</p>
-            <h2>One clear view of what happens next.</h2>
-            <p>See the current status and whether there is anything you need to do.</p>
-            <ol aria-label="Application stages">
-              <li><span aria-hidden="true">1</span>Applied</li>
-              <li><span aria-hidden="true">2</span>Identity</li>
-              <li><span aria-hidden="true">3</span>Decision</li>
-              <li><span aria-hidden="true">4</span>Funds</li>
-            </ol>
+            <p className="home-preview-kicker">A straightforward process</p>
+            <h2>Amount, total cost and monthly repayment—shown together.</h2>
+            <p>We show interest and fees before you create an account or submit an application.</p>
           </div>
           <div className="home-preview-details">
-            <div><strong>Loan progress</strong><span>Understand each stage</span></div>
-            <div><strong>Repayments</strong><span>See what is due</span></div>
+            <div>
+              <strong>1. Estimate</strong>
+              <span>Adjust amount and term</span>
+            </div>
+            <div>
+              <strong>2. Apply</strong>
+              <span>Share only what is needed</span>
+            </div>
           </div>
-          <p className="home-preview-disclaimer">Illustration only. Your actual status appears after sign in.</p>
+          <p className="home-preview-disclaimer">
+            Estimates are not loan offers. Approval follows identity and affordability checks.
+          </p>
         </div>
       </section>
       <section id="estimate" className="estimate-section" aria-labelledby="estimate-title">
@@ -313,48 +318,15 @@ export default function Home() {
           </div>
         )}
       </section>
-      <section className="preparation-section">
-        <div>
-          <p className="eyebrow">Before you apply</p>
-          <h2>
-            A little preparation.
-            <br />A clearer application.
-          </h2>
-          <p>Have these details ready. You can check and edit your answers before submitting.</p>
-          <Link className="text-link" href="/register">
-            Create your account →
-          </Link>
-        </div>
-        <dl className="preparation-list">
-          <div>
-            <dt>Identity</dt>
-            <dd>
-              Your legal name, date of birth and Kenyan National ID details. Registration is for
-              adults aged 18 and over.
-            </dd>
-          </div>
-          <div>
-            <dt>Contact details</dt>
-            <dd>A Kenyan mobile number and an email address you can access.</dd>
-          </div>
-          <div>
-            <dt>Income and commitments</dt>
-            <dd>Your work details, regular income and existing monthly loan payments.</dd>
-          </div>
-        </dl>
-      </section>
       <section className="home-support">
         <div>
-          <p className="eyebrow">We’re here to help</p>
-          <h2>Questions before you decide?</h2>
+          <p className="eyebrow">Ready when you are</p>
+          <h2>Create an account with only the essentials.</h2>
         </div>
         <div>
-          <p>
-            Find out how applications work, how to follow a decision, or how to get help with
-            repayments.
-          </p>
-          <Link href="/faq">Visit the help centre →</Link>
-          <Link href="/contact">Contact support →</Link>
+          <p>We ask for employment and income details only when you choose to apply.</p>
+          <Link href="/register">Create my account →</Link>
+          <Link href="/faq">Read common questions →</Link>
         </div>
       </section>
     </Layout>
