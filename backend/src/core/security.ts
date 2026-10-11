@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  randomInt,
+} from 'node:crypto';
 
 const keyFrom = (secret: string): Buffer => createHash('sha256').update(secret).digest();
 
@@ -37,3 +44,14 @@ export function resetToken(): { raw: string; digest: string } {
 
 export const digestResetToken = (raw: string): string =>
   createHash('sha256').update(raw).digest('hex');
+
+export function emailOtp(email: string, secret: string): { raw: string; digest: string } {
+  const raw = randomInt(0, 1_000_000).toString().padStart(6, '0');
+  return { raw, digest: digestEmailOtp(email, raw, secret) };
+}
+
+export function digestEmailOtp(email: string, raw: string, secret: string): string {
+  return createHmac('sha256', keyFrom(secret))
+    .update(`${email.trim().toLowerCase()}:${raw}`)
+    .digest('hex');
+}

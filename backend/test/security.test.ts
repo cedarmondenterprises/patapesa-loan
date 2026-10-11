@@ -1,6 +1,8 @@
 import {
   blindIndex,
   decryptSensitive,
+  digestEmailOtp,
+  emailOtp,
   digestResetToken,
   encryptSensitive,
   resetToken,
@@ -25,5 +27,13 @@ describe('sensitive data protection', () => {
     expect(token.raw).not.toBe(token.digest);
     expect(token.digest).toBe(digestResetToken(token.raw));
     expect(token.digest).toHaveLength(64);
+  });
+  it('creates a six-digit email OTP and stores only a keyed digest', () => {
+    const otp = emailOtp('User@Example.com', secret);
+    expect(otp.raw).toMatch(/^\d{6}$/);
+    expect(otp.digest).toHaveLength(64);
+    expect(otp.digest).not.toContain(otp.raw);
+    expect(digestEmailOtp('user@example.com', otp.raw, secret)).toBe(otp.digest);
+    expect(digestEmailOtp('other@example.com', otp.raw, secret)).not.toBe(otp.digest);
   });
 });

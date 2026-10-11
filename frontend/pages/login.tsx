@@ -13,7 +13,13 @@ function loginErrorMessage(error: unknown): string {
   return error.message;
 }
 
-const authenticationPages = new Set(['/login', '/register', '/forgot-password', '/reset-password']);
+const authenticationPages = new Set([
+  '/login',
+  '/register',
+  '/verify-email',
+  '/forgot-password',
+  '/reset-password',
+]);
 function safeDestination(value: string | string[] | undefined): string {
   const requested = typeof value === 'string' ? value : '/dashboard';
   const path = requested.split('?')[0];
@@ -57,14 +63,15 @@ export default function Login() {
     setLoading(true);
     setMessage('');
     const form = new FormData(e.currentTarget);
+    const email = String(form.get('email') || '')
+      .trim()
+      .toLowerCase();
     let authenticated = false;
     try {
       await api('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
-          email: String(form.get('email') || '')
-            .trim()
-            .toLowerCase(),
+          email,
           password: form.get('password'),
           remember: form.get('remember') === 'on',
         }),
@@ -74,6 +81,13 @@ export default function Login() {
       await router.replace(destination);
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) setRetryAfter(error.retryAfterSeconds);
+      if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        window.sessionStorage.setItem('patapesa_verification_email', email);
+        window.sessionStorage.setItem('patapesa_verification_next', destination);
+        window.sessionStorage.setItem('patapesa_verification_sent', '1');
+        await router.push('/verify-email');
+        return;
+      }
       setMessage(
         authenticated && error instanceof ApiError && error.status === 401
           ? 'Your login succeeded but the session cookie was not accepted. Enable cookies and try again.'
@@ -166,7 +180,10 @@ export default function Login() {
       </form>
       <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">
         New to PataPesa?{' '}
-        <Link className="font-bold text-pata-700" href={destination === '/loans' ? '/register?next=loans' : '/register'}>
+        <Link
+          className="font-bold text-pata-700"
+          href={destination === '/loans' ? '/register?next=loans' : '/register'}
+        >
           Create an account
         </Link>
       </p>

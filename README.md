@@ -31,7 +31,7 @@ openssl rand -hex 48   # generate a separate KYC_ENCRYPTION_KEY
 chmod 600 .env
 ```
 
-Edit `.env`, set `DOMAIN` and `ADMIN_DOMAIN`, add the generated secrets, then configure SMTP. Password recovery requires working SMTP settings. Both DNS records must resolve to the VM before starting Caddy.
+Edit `.env`, set `DOMAIN` and `ADMIN_DOMAIN`, add the generated secrets, then configure SMTP. New-account email OTP verification and password recovery require working SMTP settings. Use an app/API password rather than the mailbox's normal password. Both DNS records must resolve to the VM before starting Caddy.
 
 ```bash
 docker compose config
@@ -58,8 +58,10 @@ sudo docker compose exec backend npm run admin:grant -- staff@example.com
 
 That user signs in only at `https://YOUR_ADMIN_DOMAIN`. The customer site has no admin route. Do not share staff accounts.
 
-New registrations are activated automatically after server-side age, contact, profile, National
-ID, and declaration validation. The National ID is encrypted, attached to the immutable
+New registrations receive account access after server-side age, contact, profile, National ID,
+declaration validation, and a six-digit email OTP. The OTP expires after 10 minutes, permits
+five attempts, and can be resent after a 60-second cooldown. Existing accounts created before this
+feature are not retroactively locked. The National ID is encrypted, attached to the immutable
 registration record, and placed in the KYC queue automatically; it is never stored in plaintext or
 in the browser draft. Identity verification and affordability review are still required before a
 loan can be approved. Staff can reject either review with a recorded reason. The three staff roles
@@ -137,6 +139,7 @@ Open `http://localhost:3001` for staff access.
 
 - `GET /api/health` and `GET /api/health/live`
 - `POST /api/auth/register`, `/login`, `/logout`
+- `POST /api/auth/email-otp/verify`, `/email-otp/resend`
 - `POST /api/auth/forgot-password`, `/reset-password`
 - `GET /api/auth/me`
 - `GET /api/products`

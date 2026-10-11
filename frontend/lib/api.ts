@@ -5,6 +5,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly retryAfterSeconds = 0,
+    public readonly code = '',
   ) {
     super(message);
   }
@@ -50,6 +51,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
             : data.message || 'Request failed',
           response.status,
           response.status === 429 ? retryAfter || 60 : 0,
+          typeof data.code === 'string' ? data.code : '',
         );
       }
       return data;

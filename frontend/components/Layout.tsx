@@ -10,6 +10,7 @@ const PRIVATE_PATHS = new Set([
   '/dashboard',
   '/login',
   '/register',
+  '/verify-email',
   '/forgot-password',
   '/reset-password',
 ]);
