@@ -142,6 +142,9 @@ CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_cod
 CREATE INDEX IF NOT EXISTS idx_verification_codes_active_email
     ON verification_codes(user_id, created_at DESC)
     WHERE type='email_verification' AND is_used=false;
+CREATE INDEX IF NOT EXISTS idx_verification_codes_active_login
+    ON verification_codes(user_id, created_at DESC)
+    WHERE type='2fa_login' AND is_used=false;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

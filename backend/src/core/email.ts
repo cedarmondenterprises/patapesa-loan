@@ -42,6 +42,23 @@ export async function sendEmailVerification(
   });
 }
 
+export async function sendLoginOtp(
+  email: string,
+  firstName: string,
+  code: string,
+): Promise<void> {
+  if (!transporter) throw new Error('SMTP is not configured');
+  const safeName = escapeHtml(firstName);
+  const spacedCode = code.split('').join(' ');
+  await transporter.sendMail({
+    from: config.smtp.from,
+    to: email,
+    subject: 'Your PataPesa sign-in code',
+    text: `Hello ${firstName},\n\nYour PataPesa sign-in code is ${code}. It expires in 10 minutes.\n\nDo not share this code. PataPesa staff will never ask for it. If you did not try to sign in, change your password immediately.`,
+    html: `<!doctype html><html><body style="margin:0;background:#fff7ed;font-family:Arial,sans-serif;color:#292524"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:40px 16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:auto;background:#ffffff;border:1px solid #fed7aa;border-top:5px solid #f97316"><tr><td style="padding:30px 34px"><div style="font-size:22px;font-weight:800;color:#9a3412">PataPesa</div><p style="margin:34px 0 8px;font-size:12px;font-weight:700;letter-spacing:1.5px;color:#ea580c">SECURE SIGN IN</p><h1 style="margin:0;font-size:28px;line-height:1.2;color:#292524">Confirm it is you</h1><p style="margin:22px 0 0;line-height:1.7">Hello ${safeName},</p><p style="line-height:1.7;color:#57534e">Enter this six-digit code to finish signing in to PataPesa. It expires in 10 minutes.</p><div style="margin:28px 0;padding:18px;text-align:center;background:#fff7ed;border:1px solid #fed7aa;font-size:31px;font-weight:800;letter-spacing:8px;color:#9a3412">${spacedCode}</div><p style="font-size:13px;line-height:1.6;color:#78716c"><strong>Keep this code private.</strong> PataPesa staff will never ask for it. If you did not try to sign in, change your password immediately.</p></td></tr><tr><td style="padding:18px 34px;background:#ffedd5;font-size:11px;color:#78716c">PataPesa · Secure account access.</td></tr></table></td></tr></table></body></html>`,
+  });
+}
+
 export async function sendPasswordReset(
   email: string,
   firstName: string,
