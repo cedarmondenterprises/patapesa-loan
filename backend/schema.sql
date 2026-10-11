@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     profile_picture_url TEXT,
     status VARCHAR(50) DEFAULT 'ACTIVE' CHECK (status IN ('PENDING', 'ACTIVE', 'INACTIVE', 'SUSPENDED', 'REJECTED', 'DELETED')),
     is_email_verified BOOLEAN DEFAULT false,
+    email_verification_required BOOLEAN NOT NULL DEFAULT false,
     is_phone_verified BOOLEAN DEFAULT false,
     email_verified_at TIMESTAMP,
     phone_verified_at TIMESTAMP,
@@ -33,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_required BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ALTER COLUMN status SET DEFAULT 'ACTIVE';
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_status_check;
 ALTER TABLE users ADD CONSTRAINT users_status_check CHECK (status IN ('PENDING','ACTIVE','INACTIVE','SUSPENDED','REJECTED','DELETED'));
@@ -120,17 +122,26 @@ WHERE u.status='PENDING'
 CREATE TABLE IF NOT EXISTS verification_codes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    code VARCHAR(10) NOT NULL,
+    code VARCHAR(64) NOT NULL,
     type VARCHAR(50) NOT NULL CHECK (type IN ('password_reset', 'email_verification', '2fa_setup', '2fa_login', 'phone_verification')),
     expires_at TIMESTAMP NOT NULL,
     is_used BOOLEAN DEFAULT false,
     used_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    attempt_count SMALLINT NOT NULL DEFAULT 0,
+    max_attempts SMALLINT NOT NULL DEFAULT 5,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE verification_codes ALTER COLUMN code TYPE VARCHAR(64);
+ALTER TABLE verification_codes ADD COLUMN IF NOT EXISTS attempt_count SMALLINT NOT NULL DEFAULT 0;
+ALTER TABLE verification_codes ADD COLUMN IF NOT EXISTS max_attempts SMALLINT NOT NULL DEFAULT 5;
 
 CREATE INDEX IF NOT EXISTS idx_verification_codes_user_id ON verification_codes(user_id);
 CREATE INDEX IF NOT EXISTS idx_verification_codes_type ON verification_codes(type);
 CREATE INDEX IF NOT EXISTS idx_verification_codes_expires_at ON verification_codes(expires_at);
+CREATE INDEX IF NOT EXISTS idx_verification_codes_active_email
+    ON verification_codes(user_id, created_at DESC)
+    WHERE type='email_verification' AND is_used=false;
 
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

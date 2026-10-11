@@ -36,7 +36,9 @@ const normalizePhone = (value: string) => {
   return compact;
 };
 const localIsoDate = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
 
 export default function Register() {
   const router = useRouter();
@@ -73,7 +75,9 @@ export default function Register() {
       return setMessage('Use 10+ characters with uppercase, lowercase, a number and a symbol.');
     setLoading(true);
     try {
-      await api('/auth/register', {
+      const response = await api<{
+        data: { emailVerificationRequired: boolean; emailSent: boolean };
+      }>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({
           ...form,
@@ -82,11 +86,20 @@ export default function Register() {
           remember: true,
         }),
       });
-      await router.replace(
-        destination === '/loans'
-          ? '/loans'
-          : { pathname: '/dashboard', query: { welcome: 'registered' } },
-      );
+      if (response.data.emailVerificationRequired) {
+        window.sessionStorage.setItem(
+          'patapesa_verification_email',
+          form.email.trim().toLowerCase(),
+        );
+        window.sessionStorage.setItem('patapesa_verification_next', destination);
+        window.sessionStorage.setItem(
+          'patapesa_verification_sent',
+          response.data.emailSent ? '1' : '0',
+        );
+        await router.replace('/verify-email');
+        return;
+      }
+      await router.replace(destination);
     } catch (error) {
       if (error instanceof ApiError && [0, 409].includes(error.status)) setRecovery(true);
       setMessage(error instanceof Error ? error.message : 'Registration failed. Please try again.');

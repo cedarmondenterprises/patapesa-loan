@@ -13,7 +13,7 @@ import {
 } from './auth';
 import { config } from './config';
 import { query, transaction } from './db';
-import { sendPasswordReset } from './email';
+import { sendEmailVerification, sendPasswordReset } from './email';
 import { isRecentKenyanPaymentDate } from './kenya-date';
 import { calculateLoan } from './loan-calculator';
 import { requirePermission } from './permissions';
@@ -21,6 +21,8 @@ import adminRoutes from './admin-routes';
 import {
   blindIndex,
   decryptSensitive,
+  digestEmailOtp,
+  emailOtp,
   digestResetToken,
   encryptSensitive,
   resetToken,
@@ -79,6 +81,8 @@ const userId = (req: AuthRequest): string => {
   return req.user.id;
 };
 const registrationVersion = '2026-09-15';
+const emailOtpExpiryMinutes = 10;
+const emailOtpResendSeconds = 60;
 const employmentTypes = [
   'SALARIED',
   'SELF_EMPLOYED',
@@ -146,6 +150,50 @@ async function audit(
   }
 }
 
+async function resendEmailOtp(user: {
+  id: string;
+  email: string;
+  firstName: string;
+}): Promise<{ retryAfter: number }> {
+  const otp = emailOtp(user.email, config.jwtSecret);
+  const result = await transaction(async (client) => {
+    await client.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [user.id]);
+    const recent = (
+      await client.query<{ retry_after: number }>(
+        `SELECT GREATEST(0,CEIL(EXTRACT(EPOCH FROM
+           (created_at + ($2 * INTERVAL '1 second') - NOW()))))::int AS retry_after
+         FROM verification_codes
+         WHERE user_id=$1 AND type='email_verification'
+         ORDER BY created_at DESC LIMIT 1 FOR UPDATE`,
+        [user.id, emailOtpResendSeconds],
+      )
+    ).rows[0];
+    if ((recent?.retry_after || 0) > 0) return { retryAfter: recent.retry_after, challengeId: '' };
+    await client.query(
+      "UPDATE verification_codes SET is_used=true,used_at=NOW() WHERE user_id=$1 AND type='email_verification' AND is_used=false",
+      [user.id],
+    );
+    const challenge = (
+      await client.query<{ id: string }>(
+        `INSERT INTO verification_codes(user_id,code,type,expires_at)
+         VALUES($1,$2,'email_verification',NOW()+($3 * INTERVAL '1 minute')) RETURNING id`,
+        [user.id, otp.digest, emailOtpExpiryMinutes],
+      )
+    ).rows[0];
+    return { retryAfter: 0, challengeId: challenge.id };
+  });
+  if (result.retryAfter > 0) return { retryAfter: result.retryAfter };
+  try {
+    await sendEmailVerification(user.email, user.firstName, otp.raw);
+  } catch (error) {
+    await query('UPDATE verification_codes SET is_used=true,used_at=NOW() WHERE id=$1', [
+      result.challengeId,
+    ]);
+    throw error;
+  }
+  return { retryAfter: 0 };
+}
+
 router.post(
   '/auth/register',
   authLimiter,
@@ -188,6 +236,7 @@ router.post(
       if (errors.length)
         return res.status(400).json({ success: false, message: errors[0], errors });
       const { firstName, lastName, email, phone, password, dateOfBirth, nationality } = req.body;
+      const otp = emailOtp(email, config.jwtSecret);
       const hash = await bcrypt.hash(password, 12);
       const nationalIdNumber = String(req.body.nationalIdNumber),
         nationalIdCipher = encryptSensitive(nationalIdNumber, config.kycEncryptionKey),
@@ -226,7 +275,7 @@ router.post(
             last_name: string;
             auth_version: number;
           }>(
-            "INSERT INTO users(email,phone,password_hash,first_name,last_name,date_of_birth,nationality,status) VALUES($1,$2,$3,$4,$5,$6,$7,'ACTIVE') RETURNING id,email,phone,first_name,last_name,auth_version",
+            "INSERT INTO users(email,phone,password_hash,first_name,last_name,date_of_birth,nationality,status,is_email_verified,email_verification_required) VALUES($1,$2,$3,$4,$5,$6,$7,'ACTIVE',false,true) RETURNING id,email,phone,first_name,last_name,auth_version",
             [
               email,
               phone,
@@ -262,19 +311,36 @@ router.post(
             req.get('user-agent')?.slice(0, 1000) || null,
           ],
         );
-        return { ...created, kycId: kyc.id };
+        const challenge = (
+          await client.query<{ id: string }>(
+            `INSERT INTO verification_codes(user_id,code,type,expires_at)
+             VALUES($1,$2,'email_verification',NOW()+($3 * INTERVAL '1 minute')) RETURNING id`,
+            [created.id, otp.digest, emailOtpExpiryMinutes],
+          )
+        ).rows[0];
+        return { ...created, kycId: kyc.id, challengeId: challenge.id };
       });
       await audit(req, 'ACCOUNT_REGISTERED', 'user', user.id, user.id);
       await audit(req, 'KYC_SUBMITTED', 'kyc_verification', user.kycId, user.id);
-      setAuthCookie(
-        res,
-        await createSession({ id: user.id, email: user.email, authVersion: user.auth_version }),
-        req.body.remember !== false,
-      );
+      let emailSent = true;
+      try {
+        await sendEmailVerification(user.email, user.first_name, otp.raw);
+        await audit(req, 'EMAIL_VERIFICATION_SENT', 'user', user.id, user.id);
+      } catch (error) {
+        emailSent = false;
+        await query('UPDATE verification_codes SET is_used=true,used_at=NOW() WHERE id=$1', [
+          user.challengeId,
+        ]);
+        console.error('Unable to send registration verification email', {
+          userId: user.id,
+          error,
+        });
+      }
       return res.status(201).json({
         success: true,
-        message:
-          'Your account is active and your National ID has been submitted for identity review.',
+        message: emailSent
+          ? 'We sent a six-digit verification code to your email address.'
+          : 'Your account was created, but the verification email could not be sent. Use resend to try again.',
         data: {
           user: {
             id: user.id,
@@ -284,6 +350,165 @@ router.post(
             lastName: user.last_name,
           },
           registrationReference: reference,
+          emailVerificationRequired: true,
+          emailSent,
+        },
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+router.post(
+  '/auth/email-otp/resend',
+  authLimiter,
+  body('email').isEmail().normalizeEmail(),
+  async (req, res, next) => {
+    try {
+      if (errorsFor(req).length)
+        return res.status(400).json({ success: false, message: 'Enter a valid email address' });
+      const user = (
+        await query<{ id: string; email: string; first_name: string }>(
+          `SELECT id,email,first_name FROM users
+           WHERE email=$1 AND status='ACTIVE' AND deleted_at IS NULL
+             AND email_verification_required=true AND is_email_verified=false`,
+          [req.body.email],
+        )
+      )[0];
+      if (!user)
+        return res.status(202).json({
+          success: true,
+          message: 'If that account needs verification, a new code has been sent.',
+        });
+      const delivery = await resendEmailOtp({
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+      });
+      if (delivery.retryAfter > 0) {
+        res.setHeader('Retry-After', String(delivery.retryAfter));
+        return res.status(429).json({
+          success: false,
+          code: 'OTP_RESEND_COOLDOWN',
+          message: `Wait ${delivery.retryAfter} seconds before requesting another code.`,
+        });
+      }
+      await audit(req, 'EMAIL_VERIFICATION_SENT', 'user', user.id, user.id);
+      return res.status(202).json({
+        success: true,
+        message: 'A new six-digit code has been sent. It expires in 10 minutes.',
+      });
+    } catch (error) {
+      console.error('Unable to resend email verification code', { error });
+      return next(
+        Object.assign(new Error('We could not send the verification email. Please try again.'), {
+          status: 503,
+        }),
+      );
+    }
+  },
+);
+
+router.post(
+  '/auth/email-otp/verify',
+  authLimiter,
+  body('email').isEmail().normalizeEmail(),
+  body('code')
+    .trim()
+    .matches(/^\d{6}$/),
+  body('remember').optional().isBoolean().toBoolean(),
+  async (req, res, next) => {
+    try {
+      if (errorsFor(req).length)
+        return res.status(400).json({
+          success: false,
+          code: 'OTP_INVALID',
+          message: 'Enter the six-digit code from your email.',
+        });
+      const submittedDigest = digestEmailOtp(req.body.email, req.body.code, config.jwtSecret);
+      const verified = await transaction(async (client) => {
+        const challenge = (
+          await client.query<{
+            id: string;
+            code: string;
+            expires_at: Date;
+            attempt_count: number;
+            max_attempts: number;
+            user_id: string;
+            email: string;
+            phone: string;
+            first_name: string;
+            last_name: string;
+            auth_version: number;
+          }>(
+            `SELECT vc.id,vc.code,vc.expires_at,vc.attempt_count,vc.max_attempts,
+                    u.id AS user_id,u.email,u.phone,u.first_name,u.last_name,u.auth_version
+             FROM verification_codes vc JOIN users u ON u.id=vc.user_id
+             WHERE u.email=$1 AND u.status='ACTIVE' AND u.deleted_at IS NULL
+               AND u.email_verification_required=true AND u.is_email_verified=false
+               AND vc.type='email_verification' AND vc.is_used=false
+             ORDER BY vc.created_at DESC LIMIT 1 FOR UPDATE OF vc,u`,
+            [req.body.email],
+          )
+        ).rows[0];
+        if (!challenge) return null;
+        const expired = new Date(challenge.expires_at).getTime() <= Date.now();
+        if (expired || challenge.attempt_count >= challenge.max_attempts) {
+          await client.query(
+            'UPDATE verification_codes SET is_used=true,used_at=NOW() WHERE id=$1',
+            [challenge.id],
+          );
+          return null;
+        }
+        if (challenge.code !== submittedDigest) {
+          await client.query(
+            `UPDATE verification_codes
+             SET attempt_count=attempt_count+1,
+                 is_used=(attempt_count+1>=max_attempts),
+                 used_at=CASE WHEN attempt_count+1>=max_attempts THEN NOW() ELSE used_at END
+             WHERE id=$1`,
+            [challenge.id],
+          );
+          return null;
+        }
+        await client.query('UPDATE verification_codes SET is_used=true,used_at=NOW() WHERE id=$1', [
+          challenge.id,
+        ]);
+        await client.query(
+          `UPDATE users SET is_email_verified=true,email_verification_required=false,
+             email_verified_at=NOW(),updated_at=NOW() WHERE id=$1`,
+          [challenge.user_id],
+        );
+        return challenge;
+      });
+      if (!verified)
+        return res.status(400).json({
+          success: false,
+          code: 'OTP_INVALID',
+          message: 'That code is incorrect or expired. Check the email or request a new code.',
+        });
+      await audit(req, 'EMAIL_VERIFIED', 'user', verified.user_id, verified.user_id);
+      setAuthCookie(
+        res,
+        await createSession({
+          id: verified.user_id,
+          email: verified.email,
+          authVersion: verified.auth_version,
+        }),
+        req.body.remember !== false,
+      );
+      return res.json({
+        success: true,
+        message: 'Email verified. Your PataPesa account is ready.',
+        data: {
+          user: {
+            id: verified.user_id,
+            email: verified.email,
+            phone: verified.phone,
+            firstName: verified.first_name,
+            lastName: verified.last_name,
+          },
         },
       });
     } catch (error) {
@@ -314,8 +539,10 @@ router.post(
           password_hash: string;
           status: string;
           auth_version: number;
+          is_email_verified: boolean;
+          email_verification_required: boolean;
         }>(
-          'SELECT id,email,phone,first_name,last_name,password_hash,status,auth_version FROM users WHERE email=$1 AND deleted_at IS NULL',
+          'SELECT id,email,phone,first_name,last_name,password_hash,status,auth_version,is_email_verified,email_verification_required FROM users WHERE email=$1 AND deleted_at IS NULL',
           [req.body.email],
         )
       )[0];
@@ -332,6 +559,12 @@ router.post(
           message: statusMessages[user.status] || 'This account is not active. Contact support.',
         });
       }
+      if (user.email_verification_required && !user.is_email_verified)
+        return res.status(403).json({
+          success: false,
+          code: 'EMAIL_VERIFICATION_REQUIRED',
+          message: 'Verify your email address before signing in.',
+        });
       await query('UPDATE users SET last_login=NOW() WHERE id=$1', [user.id]);
       setAuthCookie(
         res,

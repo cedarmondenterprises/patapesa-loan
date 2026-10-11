@@ -1,24 +1,32 @@
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 
 process.env.NODE_ENV = 'test';
 
 const queryMock = jest.fn();
 const transactionMock = jest.fn();
+const sendEmailVerificationMock = jest.fn();
 jest.mock('../src/core/db', () => ({
   query: (...args: unknown[]) => queryMock(...args),
   transaction: (...args: unknown[]) => transactionMock(...args),
   pool: { query: jest.fn().mockResolvedValue({ rows: [] }) },
+}));
+jest.mock('../src/core/email', () => ({
+  sendEmailVerification: (...args: unknown[]) => sendEmailVerificationMock(...args),
+  sendPasswordReset: jest.fn(),
 }));
 
 import app from '../src/app';
 import { createToken } from '../src/core/auth';
 import { kenyaDate } from '../src/core/kenya-date';
 import { normalizeMetricsPath, renderMetrics } from '../src/core/metrics';
+import { digestEmailOtp } from '../src/core/security';
 
 describe('API security and authentication surface', () => {
   beforeEach(() => {
     queryMock.mockReset();
     transactionMock.mockReset();
+    sendEmailVerificationMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('reports liveness without exposing server details', async () => {
@@ -74,7 +82,7 @@ describe('API security and authentication surface', () => {
     expect(response.status).toBe(403);
   });
 
-  it('creates an active registration and starts an authenticated session', async () => {
+  it('creates an active registration and requires emailed OTP verification', async () => {
     const clientQuery = jest
       .fn()
       .mockResolvedValueOnce({
@@ -92,9 +100,12 @@ describe('API security and authentication surface', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 'd7663877-533c-4c37-ab4b-d5cf9daf42bb' }],
       })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'f901ae42-84da-4947-bb83-1753e7e83123' }],
+      });
     transactionMock.mockImplementation(async (work) => work({ query: clientQuery }));
-    queryMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    queryMock.mockResolvedValue([]);
     const response = await request(app)
       .post('/api/auth/register')
       .set('Origin', 'http://localhost:3000')
@@ -132,10 +143,12 @@ describe('API security and authentication surface', () => {
       });
     expect(response.status).toBe(201);
     expect(response.body.data.token).toBeUndefined();
-    expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
-    expect(response.body.message).toContain('account is active');
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(response.body.message).toContain('six-digit verification code');
+    expect(response.body.data.emailVerificationRequired).toBe(true);
+    expect(response.body.data.emailSent).toBe(true);
     expect(response.body.data.registrationReference).toMatch(/^PPR-/);
-    expect(clientQuery).toHaveBeenCalledTimes(3);
+    expect(clientQuery).toHaveBeenCalledTimes(4);
     expect(clientQuery.mock.calls[1][0]).toContain('INSERT INTO kyc_verifications');
     expect(clientQuery.mock.calls[1][1][3]).toBe('5678');
     const storedAnswers = JSON.parse(String(clientQuery.mock.calls[2][1][3])) as Record<
@@ -147,6 +160,189 @@ describe('API security and authentication surface', () => {
     expect(clientQuery.mock.calls[2][0]).toContain('national_id_ciphertext');
     expect(clientQuery.mock.calls[2][1][5]).not.toBe('12345678');
     expect(clientQuery.mock.calls[2][1][6]).toBe('5678');
+    expect(clientQuery.mock.calls[3][0]).toContain('INSERT INTO verification_codes');
+    expect(clientQuery.mock.calls[3][1][1]).toHaveLength(64);
+    expect(clientQuery.mock.calls[3][1][1]).not.toMatch(/^\d{6}$/);
+    expect(sendEmailVerificationMock).toHaveBeenCalledWith(
+      'user@example.com',
+      'Jane',
+      expect.stringMatching(/^\d{6}$/),
+    );
+  });
+
+  it('verifies a valid email OTP once and starts the session', async () => {
+    const challenge = {
+      id: 'f901ae42-84da-4947-bb83-1753e7e83123',
+      code: digestEmailOtp('user@example.com', '123456', 'development-only-secret-change-me'),
+      expires_at: new Date(Date.now() + 60_000),
+      attempt_count: 0,
+      max_attempts: 5,
+      user_id: '8f95d132-4665-4c15-8623-652e76f18c70',
+      email: 'user@example.com',
+      phone: '+254712345678',
+      first_name: 'Jane',
+      last_name: 'Doe',
+      auth_version: 0,
+    };
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [challenge] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    queryMock.mockResolvedValue([]);
+    const response = await request(app)
+      .post('/api/auth/email-otp/verify')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'user@example.com', code: '123456', remember: true });
+    expect(response.status).toBe(200);
+    expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
+    expect(response.body.message).toContain('Email verified');
+    expect(clientQuery.mock.calls[1][0]).toContain('is_used=true');
+    expect(clientQuery.mock.calls[2][0]).toContain('is_email_verified=true');
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO auth_sessions'),
+      expect.any(Array),
+    );
+  });
+
+  it('counts an incorrect email OTP attempt and does not create a session', async () => {
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'f901ae42-84da-4947-bb83-1753e7e83123',
+            code: digestEmailOtp('user@example.com', '123456', 'development-only-secret-change-me'),
+            expires_at: new Date(Date.now() + 60_000),
+            attempt_count: 0,
+            max_attempts: 5,
+            user_id: '8f95d132-4665-4c15-8623-652e76f18c70',
+            email: 'user@example.com',
+            phone: '+254712345678',
+            first_name: 'Jane',
+            last_name: 'Doe',
+            auth_version: 0,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    const response = await request(app)
+      .post('/api/auth/email-otp/verify')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'user@example.com', code: '654321' });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('OTP_INVALID');
+    expect(clientQuery.mock.calls[1][0]).toContain('attempt_count=attempt_count+1');
+    expect(queryMock).not.toHaveBeenCalled();
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('requires verification when a newly registered user signs in', async () => {
+    queryMock.mockResolvedValueOnce([
+      {
+        id: '8f95d132-4665-4c15-8623-652e76f18c70',
+        email: 'user@example.com',
+        phone: '+254712345678',
+        first_name: 'Jane',
+        last_name: 'Doe',
+        password_hash: await bcrypt.hash('StrongPass1!', 4),
+        status: 'ACTIVE',
+        auth_version: 0,
+        is_email_verified: false,
+        email_verification_required: true,
+      },
+    ]);
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'user@example.com', password: 'StrongPass1!' });
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('EMAIL_VERIFICATION_REQUIRED');
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not lock out an existing account introduced before email OTP', async () => {
+    queryMock
+      .mockResolvedValueOnce([
+        {
+          id: '8f95d132-4665-4c15-8623-652e76f18c70',
+          email: 'legacy@example.com',
+          phone: '+254712345678',
+          first_name: 'Legacy',
+          last_name: 'User',
+          password_hash: await bcrypt.hash('StrongPass1!', 4),
+          status: 'ACTIVE',
+          auth_version: 0,
+          is_email_verified: false,
+          email_verification_required: false,
+        },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'legacy@example.com', password: 'StrongPass1!' });
+    expect(response.status).toBe(200);
+    expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
+  });
+
+  it('resends a fresh OTP after invalidating the previous challenge', async () => {
+    queryMock
+      .mockResolvedValueOnce([
+        {
+          id: '8f95d132-4665-4c15-8623-652e76f18c70',
+          email: 'user@example.com',
+          first_name: 'Jane',
+        },
+      ])
+      .mockResolvedValue([]);
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: '8f95d132-4665-4c15-8623-652e76f18c70' }] })
+      .mockResolvedValueOnce({ rows: [{ retry_after: 0 }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'f901ae42-84da-4947-bb83-1753e7e83123' }],
+      });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    const response = await request(app)
+      .post('/api/auth/email-otp/resend')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'user@example.com' });
+    expect(response.status).toBe(202);
+    expect(clientQuery.mock.calls[2][0]).toContain('is_used=true');
+    expect(clientQuery.mock.calls[3][0]).toContain('INSERT INTO verification_codes');
+    expect(sendEmailVerificationMock).toHaveBeenCalledWith(
+      'user@example.com',
+      'Jane',
+      expect.stringMatching(/^\d{6}$/),
+    );
+  });
+
+  it('enforces the email OTP resend cooldown', async () => {
+    queryMock.mockResolvedValueOnce([
+      {
+        id: '8f95d132-4665-4c15-8623-652e76f18c70',
+        email: 'user@example.com',
+        first_name: 'Jane',
+      },
+    ]);
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: '8f95d132-4665-4c15-8623-652e76f18c70' }] })
+      .mockResolvedValueOnce({ rows: [{ retry_after: 42 }] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    const response = await request(app)
+      .post('/api/auth/email-otp/resend')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'user@example.com' });
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBe('42');
+    expect(sendEmailVerificationMock).not.toHaveBeenCalled();
   });
 
   it('rejects registration when the date of birth is today', async () => {
