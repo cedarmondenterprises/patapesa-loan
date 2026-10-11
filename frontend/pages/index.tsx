@@ -97,25 +97,26 @@ export default function Home() {
     >
       <section className="home-hero">
         <div className="hero-story">
-          <p className="eyebrow">Simple, transparent loans</p>
+          <p className="eyebrow">PataPesa loans</p>
           <h1>
-            See the full cost.
+            Know your repayment
             <br />
-            <em>Then decide.</em>
+            <em>before you apply.</em>
           </h1>
           <p className="hero-description">
-            Choose an amount, see the estimated repayment and apply only when it works for you.
+            Enter an amount and repayment period to see the estimated monthly payment, interest
+            and fees.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="#estimate">
-              Check my estimate <span aria-hidden="true">→</span>
+              Calculate repayment <span aria-hidden="true">→</span>
             </a>
             <Link className="button button-secondary" href="/login">
               Sign in
             </Link>
           </div>
           <p className="hero-caption">
-            No hidden questionnaire. Creating an account takes only the essentials.
+            Estimates are free and do not affect your eligibility.
           </p>
         </div>
         <div className="home-account-preview" aria-label="Preview of the customer account">
