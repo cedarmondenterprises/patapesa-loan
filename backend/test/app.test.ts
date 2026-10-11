@@ -6,6 +6,7 @@ process.env.NODE_ENV = 'test';
 const queryMock = jest.fn();
 const transactionMock = jest.fn();
 const sendEmailVerificationMock = jest.fn();
+const sendLoginOtpMock = jest.fn();
 jest.mock('../src/core/db', () => ({
   query: (...args: unknown[]) => queryMock(...args),
   transaction: (...args: unknown[]) => transactionMock(...args),
@@ -13,6 +14,7 @@ jest.mock('../src/core/db', () => ({
 }));
 jest.mock('../src/core/email', () => ({
   sendEmailVerification: (...args: unknown[]) => sendEmailVerificationMock(...args),
+  sendLoginOtp: (...args: unknown[]) => sendLoginOtpMock(...args),
   sendPasswordReset: jest.fn(),
 }));
 
@@ -27,6 +29,7 @@ describe('API security and authentication surface', () => {
     queryMock.mockReset();
     transactionMock.mockReset();
     sendEmailVerificationMock.mockReset().mockResolvedValue(undefined);
+    sendLoginOtpMock.mockReset().mockResolvedValue(undefined);
   });
 
   it('reports liveness without exposing server details', async () => {
@@ -264,30 +267,110 @@ describe('API security and authentication surface', () => {
     expect(queryMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not lock out an existing account introduced before email OTP', async () => {
-    queryMock
-      .mockResolvedValueOnce([
-        {
-          id: '8f95d132-4665-4c15-8623-652e76f18c70',
-          email: 'legacy@example.com',
-          phone: '+254712345678',
-          first_name: 'Legacy',
-          last_name: 'User',
-          password_hash: await bcrypt.hash('StrongPass1!', 4),
-          status: 'ACTIVE',
-          auth_version: 0,
-          is_email_verified: false,
-          email_verification_required: false,
-        },
-      ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([]);
+  it('requires an emailed OTP after a valid password for existing accounts', async () => {
+    queryMock.mockResolvedValueOnce([
+      {
+        id: '8f95d132-4665-4c15-8623-652e76f18c70',
+        email: 'legacy@example.com',
+        phone: '+254712345678',
+        first_name: 'Legacy',
+        last_name: 'User',
+        password_hash: await bcrypt.hash('StrongPass1!', 4),
+        status: 'ACTIVE',
+        auth_version: 0,
+        is_email_verified: false,
+        email_verification_required: false,
+      },
+    ]);
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [{ id: '8f95d132-4665-4c15-8623-652e76f18c70' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: '55f6926c-23f7-4f86-95ce-f96b11f3cd75' }] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
     const response = await request(app)
       .post('/api/auth/login')
       .set('Origin', 'http://localhost:3000')
       .send({ email: 'legacy@example.com', password: 'StrongPass1!' });
+    expect(response.status).toBe(202);
+    expect(response.body.code).toBe('LOGIN_OTP_REQUIRED');
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expect(clientQuery.mock.calls[2][0]).toContain("type='2fa_login'");
+    expect(clientQuery.mock.calls[3][0]).toContain('INSERT INTO verification_codes');
+    expect(sendLoginOtpMock).toHaveBeenCalledWith(
+      'legacy@example.com',
+      'Legacy',
+      expect.stringMatching(/^\d{6}$/),
+    );
+  });
+
+  it('verifies a login OTP and creates the authenticated session', async () => {
+    const challenge = {
+      id: '55f6926c-23f7-4f86-95ce-f96b11f3cd75',
+      code: digestEmailOtp('legacy@example.com', '246810', 'development-only-secret-change-me'),
+      expires_at: new Date(Date.now() + 60_000),
+      attempt_count: 0,
+      max_attempts: 5,
+      user_id: '8f95d132-4665-4c15-8623-652e76f18c70',
+      email: 'legacy@example.com',
+      phone: '+254712345678',
+      first_name: 'Legacy',
+      last_name: 'User',
+      auth_version: 0,
+    };
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({ rows: [challenge] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    queryMock.mockResolvedValue([]);
+    const response = await request(app)
+      .post('/api/auth/login/verify-otp')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'legacy@example.com', code: '246810', remember: true });
     expect(response.status).toBe(200);
+    expect(response.body.message).toBe('Login successful');
     expect(response.headers['set-cookie']?.[0]).toContain('patapesa_session=');
+    expect(clientQuery.mock.calls[1][0]).toContain('is_used=true');
+    expect(clientQuery.mock.calls[2][0]).toContain('last_login=NOW()');
+  });
+
+  it('counts an incorrect login OTP attempt without creating a session', async () => {
+    const clientQuery = jest
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '55f6926c-23f7-4f86-95ce-f96b11f3cd75',
+            code: digestEmailOtp(
+              'legacy@example.com',
+              '246810',
+              'development-only-secret-change-me',
+            ),
+            expires_at: new Date(Date.now() + 60_000),
+            attempt_count: 0,
+            max_attempts: 5,
+            user_id: '8f95d132-4665-4c15-8623-652e76f18c70',
+            email: 'legacy@example.com',
+            phone: '+254712345678',
+            first_name: 'Legacy',
+            last_name: 'User',
+            auth_version: 0,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    transactionMock.mockImplementationOnce(async (work) => work({ query: clientQuery }));
+    const response = await request(app)
+      .post('/api/auth/login/verify-otp')
+      .set('Origin', 'http://localhost:3000')
+      .send({ email: 'legacy@example.com', code: '111111' });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe('OTP_INVALID');
+    expect(clientQuery.mock.calls[1][0]).toContain('attempt_count=attempt_count+1');
+    expect(response.headers['set-cookie']).toBeUndefined();
   });
 
   it('resends a fresh OTP after invalidating the previous challenge', async () => {

@@ -171,6 +171,26 @@ button {
   border-radius: 2px;
   font-weight: 800;
 }
+.login-card .admin-otp-input {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-align: center;
+}
+.admin-otp-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+}
+.admin-otp-actions button {
+  border: 0;
+  background: none;
+  color: var(--forest);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: underline;
+}
 .security-note {
   margin-top: 20px;
   color: var(--muted);

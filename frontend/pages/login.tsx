@@ -34,7 +34,12 @@ export default function Login() {
     [loading, setLoading] = useState(false),
     [checkingSession, setCheckingSession] = useState(true),
     [show, setShow] = useState(false),
-    [retryAfter, setRetryAfter] = useState(0);
+    [retryAfter, setRetryAfter] = useState(0),
+    [phase, setPhase] = useState<'password' | 'otp'>('password'),
+    [email, setEmail] = useState(''),
+    [password, setPassword] = useState(''),
+    [remember, setRemember] = useState(true),
+    [code, setCode] = useState('');
   useEffect(() => {
     if (!retryAfter) return;
     const timer = window.setTimeout(() => setRetryAfter((n) => Math.max(0, n - 1)), 1000);
@@ -62,27 +67,35 @@ export default function Login() {
     if (checkingSession || loading || retryAfter > 0) return;
     setLoading(true);
     setMessage('');
-    const form = new FormData(e.currentTarget);
-    const email = String(form.get('email') || '')
-      .trim()
-      .toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
     let authenticated = false;
     try {
-      await api('/auth/login', {
+      const response = await api<{
+        code?: string;
+        data?: { retryAfter?: number };
+      }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
-          email,
-          password: form.get('password'),
-          remember: form.get('remember') === 'on',
+          email: normalizedEmail,
+          password,
+          remember,
         }),
       });
+      if (response.code === 'LOGIN_OTP_REQUIRED') {
+        setEmail(normalizedEmail);
+        setPhase('otp');
+        setCode('');
+        setRetryAfter(response.data?.retryAfter || 60);
+        setMessage('Enter the six-digit code sent to your email.');
+        return;
+      }
       authenticated = true;
       await api('/auth/me');
       await router.replace(destination);
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) setRetryAfter(error.retryAfterSeconds);
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
-        window.sessionStorage.setItem('patapesa_verification_email', email);
+        window.sessionStorage.setItem('patapesa_verification_email', normalizedEmail);
         window.sessionStorage.setItem('patapesa_verification_next', destination);
         window.sessionStorage.setItem('patapesa_verification_sent', '1');
         await router.push('/verify-email');
@@ -97,6 +110,50 @@ export default function Login() {
       setLoading(false);
     }
   }
+  async function verifyOtp(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (loading || !/^\d{6}$/.test(code)) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      await api('/auth/login/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, code, remember }),
+      });
+      await api('/auth/me');
+      await router.replace(destination);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 429) setRetryAfter(error.retryAfterSeconds);
+      setMessage(loginErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function resendLoginOtp() {
+    if (loading || retryAfter > 0) return;
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await api<{ data?: { retryAfter?: number } }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, remember }),
+      });
+      setRetryAfter(response.data?.retryAfter || 60);
+      setMessage('A sign-in code is ready in your email.');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 429) setRetryAfter(error.retryAfterSeconds);
+      setMessage(loginErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+  function restartLogin() {
+    setPhase('password');
+    setPassword('');
+    setCode('');
+    setMessage('');
+    setRetryAfter(0);
+  }
   return (
     <AuthShell
       title="Sign in"
@@ -105,8 +162,14 @@ export default function Login() {
       copy="Review an application, complete identity verification and see every lending decision in one secure place."
     >
       <p className="eyebrow">Customer sign in</p>
-      <h2 className="mt-3 text-3xl font-bold tracking-[-.025em] text-pata-950">Welcome back</h2>
-      <p className="mt-2 text-sm text-slate-500">Enter the details used when you registered.</p>
+      <h2 className="mt-3 text-3xl font-bold tracking-[-.025em] text-pata-950">
+        {phase === 'otp' ? 'Check your email' : 'Welcome back'}
+      </h2>
+      <p className="mt-2 text-sm text-slate-500">
+        {phase === 'otp'
+          ? `We sent a secure sign-in code to ${email}.`
+          : 'Enter the details used when you registered.'}
+      </p>
       {router.query.registered === '1' && !message && (
         <p role="status" className="notice notice-success mt-6">
           Registration completed. Sign in to continue to your account.
@@ -117,6 +180,7 @@ export default function Login() {
           {message}
         </p>
       )}
+      {phase === 'password' ? (
       <form className="mt-8 space-y-5" onSubmit={submit}>
         <label className="field">
           <span>Email address</span>
@@ -127,6 +191,8 @@ export default function Login() {
             disabled={checkingSession || loading}
             autoComplete="email"
             placeholder="name@example.com"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
         </label>
         <label className="field">
@@ -139,6 +205,8 @@ export default function Login() {
               disabled={checkingSession || loading}
               autoComplete="current-password"
               className="pr-16"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
             />
             <button
               type="button"
@@ -156,8 +224,9 @@ export default function Login() {
             <input
               name="remember"
               type="checkbox"
-              defaultChecked
               disabled={checkingSession || loading}
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
             />{' '}
             Keep me signed in
           </label>
@@ -178,6 +247,38 @@ export default function Login() {
             : 'Sign in securely'}
         </button>
       </form>
+      ) : (
+        <form className="email-otp-form" onSubmit={verifyOtp}>
+          <label className="field">
+            <span>Six-digit sign-in code</span>
+            <input
+              className="email-otp-input"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              pattern="[0-9]{6}"
+              placeholder="000000"
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              disabled={loading}
+              autoFocus
+              required
+            />
+          </label>
+          <button disabled={loading || code.length !== 6} className="button button-primary w-full">
+            {loading ? 'Verifying…' : 'Verify and sign in'}
+          </button>
+          <div className="email-otp-actions">
+            <button type="button" onClick={resendLoginOtp} disabled={loading || retryAfter > 0}>
+              {retryAfter > 0 ? `Resend in ${retryAfter}s` : 'Resend code'}
+            </button>
+            <button type="button" onClick={restartLogin} disabled={loading}>
+              Use another account
+            </button>
+          </div>
+        </form>
+      )}
       <p className="mt-7 border-t border-pata-900/10 pt-6 text-sm text-slate-600">
         New to PataPesa?{' '}
         <Link
