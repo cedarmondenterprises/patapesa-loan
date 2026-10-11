@@ -1093,3 +1093,292 @@ textarea {
     scroll-behavior: auto;
   }
 }
+
+/* Mobile app presentation — compact card hierarchy inspired by modern Figma loan dashboards. */
+.public-mobile-tabs {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .site-shell {
+    background: #f7f7f8;
+  }
+  .site-header {
+    position: relative;
+    border-bottom: 0;
+    background: #fff;
+  }
+  .site-nav {
+    height: 66px;
+  }
+  .site-main {
+    padding: 0 0 108px;
+  }
+  .site-main > section {
+    width: 100%;
+  }
+  .site-footer {
+    display: none;
+  }
+  .public-mobile-tabs {
+    position: fixed;
+    z-index: 120;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    min-height: 68px;
+    padding: 8px 7px;
+    border: 1px solid #f3f4f6;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 0.97);
+    box-shadow: 0 15px 45px rgba(42, 33, 28, 0.18);
+    backdrop-filter: blur(16px);
+  }
+  .public-mobile-tabs a {
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 4px;
+    min-width: 0;
+    color: #9ca3af;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .public-mobile-tabs svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .public-mobile-tabs a[aria-current='page'] {
+    color: #f97316;
+  }
+  .home-hero {
+    display: block;
+    padding: 0 0 26px;
+  }
+  .hero-story {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    padding: 35px 24px 78px;
+    border-radius: 0 0 34px 34px;
+    color: #fff;
+    background: linear-gradient(145deg, #fb923c 0%, #f97316 52%, #ea580c 100%);
+  }
+  .hero-story::before,
+  .hero-story::after {
+    position: absolute;
+    z-index: -1;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 50%;
+    content: '';
+  }
+  .hero-story::before {
+    top: -88px;
+    right: -82px;
+    width: 235px;
+    height: 235px;
+  }
+  .hero-story::after {
+    right: 35px;
+    bottom: -105px;
+    width: 185px;
+    height: 185px;
+  }
+  .hero-story .eyebrow,
+  .hero-story h1,
+  .hero-story h1 em,
+  .hero-story .hero-description,
+  .hero-story .hero-caption {
+    color: #fff;
+  }
+  .hero-story .eyebrow {
+    opacity: 0.82;
+  }
+  .hero-story h1 {
+    max-width: 360px;
+    margin: 13px 0 16px;
+    font-size: clamp(36px, 11vw, 48px);
+    line-height: 1.02;
+  }
+  .hero-story .hero-description {
+    max-width: 340px;
+    opacity: 0.91;
+  }
+  .hero-story .hero-actions {
+    display: grid;
+    grid-template-columns: 1.35fr 0.8fr;
+  }
+  .hero-story .button {
+    min-width: 0;
+    border-radius: 14px;
+  }
+  .hero-story .button-primary {
+    color: #c2410c;
+    background: #fff;
+  }
+  .hero-story .button-secondary {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.7);
+    background: transparent;
+  }
+  .hero-story .hero-caption {
+    opacity: 0.74;
+  }
+  .home-account-preview {
+    position: relative;
+    z-index: 2;
+    margin: -52px 16px 0;
+    padding: 13px;
+    border: 0;
+    border-radius: 24px;
+    box-shadow: 0 18px 45px rgba(124, 45, 18, 0.16);
+  }
+  .home-preview-progress {
+    padding: 21px 18px;
+    border: 0;
+    border-radius: 18px;
+    background: #fff7ed;
+  }
+  .home-preview-progress h2 {
+    font-size: 21px;
+  }
+  .home-preview-details > div {
+    min-height: 75px;
+    border-color: #f3f4f6;
+    border-radius: 16px;
+    background: #fff;
+  }
+  .estimate-section {
+    width: auto !important;
+    margin: 0 16px 18px !important;
+    padding: 26px 16px 16px;
+    border: 0;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(42, 33, 28, 0.06);
+  }
+  .estimate-section .section-heading-row h2 {
+    font-size: 25px;
+  }
+  .estimate-section .section-heading-row > p {
+    display: none;
+  }
+  .estimate-layout {
+    overflow: hidden;
+    border-color: #f3f4f6;
+    border-radius: 20px;
+  }
+  .estimate-controls,
+  .estimate-result {
+    padding: 20px 17px;
+  }
+  .loan-type-options > div {
+    gap: 7px;
+  }
+  .loan-type-options button {
+    border-radius: 30px;
+  }
+  .estimate-result {
+    border-top: 0;
+    border-radius: 18px;
+    background: linear-gradient(160deg, #fff7ed, #fff);
+  }
+  .estimate-result .button-primary {
+    min-height: 54px;
+    border-radius: 14px;
+  }
+  .home-support {
+    width: auto !important;
+    margin: 0 16px !important;
+    padding: 25px 22px;
+    border: 1px solid #fed7aa;
+    border-radius: 22px;
+    background: #fff7ed;
+  }
+  .home-support h2 {
+    font-size: 24px;
+  }
+  .privacy-consent {
+    bottom: 92px;
+  }
+
+  .auth-topbar {
+    max-width: none;
+    padding: 17px 20px;
+    color: #fff;
+    background: #f97316;
+  }
+  .auth-topbar .brand-name,
+  .auth-topbar .brand-name > span,
+  .auth-topbar > a:last-child {
+    color: #fff;
+  }
+  .auth-layout,
+  .auth-layout-wide {
+    margin: 0 auto 24px;
+    padding: 0;
+    background: #f7f7f8;
+  }
+  .auth-context {
+    padding: 20px 20px 40px;
+    border-radius: 0 0 30px 30px;
+    color: #fff;
+    background: #f97316;
+  }
+  .auth-context .eyebrow,
+  .auth-context h1,
+  .auth-context > p:not(.eyebrow) {
+    color: #fff;
+  }
+  .auth-context h1 {
+    max-width: 350px;
+    margin: 8px 0 10px;
+    font-family: inherit;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1.08;
+  }
+  .auth-context > p:not(.eyebrow) {
+    max-width: 360px;
+    font-size: 14px;
+    line-height: 1.55;
+    opacity: 0.86;
+  }
+  .auth-card {
+    position: relative;
+    z-index: 2;
+    margin: -18px 12px 28px;
+    padding: 25px 19px;
+    border: 0;
+    border-radius: 24px;
+    box-shadow: 0 18px 45px rgba(42, 33, 28, 0.12);
+  }
+  .registration-simple-heading h2 {
+    font-size: 25px;
+  }
+  .field input,
+  .field select,
+  .field textarea {
+    min-height: 53px;
+    border-color: #e5e7eb;
+    border-radius: 13px;
+    background: #fffbf8;
+  }
+  .registration-simple-checks {
+    border-radius: 16px;
+  }
+  .registration-submit {
+    min-height: 56px;
+    border-radius: 14px;
+  }
+  .auth-bottom {
+    display: none;
+  }
+}
