@@ -32,14 +32,20 @@ export function TrackingAndAds() {
   const [choiceMade, setChoiceMade] = useState(false);
   const [integrations, setIntegrations] = useState<SiteIntegration[]>([]);
 
+  const loadIntegrations = () => {
+    api<{ data: SiteIntegration[] }>('/integrations')
+      .then(({ data }) => setIntegrations(data))
+      .catch(() => setIntegrations([]));
+  };
+
   useEffect(() => {
     const saved = readConsent();
     setConsent(saved);
     setChoiceMade(Boolean(saved));
     setReady(true);
-    api<{ data: SiteIntegration[] }>('/integrations')
-      .then(({ data }) => setIntegrations(data))
-      .catch(() => setIntegrations([]));
+    // Do not download integration settings (or any third-party scripts) until
+    // the visitor has explicitly accepted optional analytics and advertising.
+    if (saved === 'accepted') loadIntegrations();
   }, []);
 
   const choose = (value: Consent) => {
@@ -47,6 +53,7 @@ export function TrackingAndAds() {
     setConsent(value);
     setChoiceMade(true);
     window.dispatchEvent(new CustomEvent('patapesa:privacy-choice', { detail: value }));
+    if (value === 'accepted') loadIntegrations();
   };
   const changeChoice = () => {
     window.localStorage.removeItem(consentKey);

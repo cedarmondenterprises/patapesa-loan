@@ -60,6 +60,15 @@ if (!socialImage.ok || !socialImage.headers.get('content-type')?.includes('image
   failures.push('The PNG social preview is missing or served with the wrong content type');
 }
 
+for (const asset of ['/favicon.svg', '/social-preview.png']) {
+  const response = await fetch(`${origin}${asset}`, { method: 'HEAD' });
+  const cacheControl = response.headers.get('cache-control') || '';
+  const maxAge = Number(cacheControl.match(/(?:^|,)\s*max-age=(\d+)/i)?.[1] || 0);
+  if (!response.ok || maxAge < 604800) {
+    failures.push(`${asset}: expected a browser cache lifetime of at least seven days`);
+  }
+}
+
 const adminOrigin = process.env.ADMIN_SEO_ORIGIN || 'https://admin.cedarmondtv.site';
 const adminResponse = await fetch(adminOrigin);
 const adminHtml = await adminResponse.text();
